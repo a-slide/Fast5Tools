@@ -28,5 +28,5 @@ setup_dict = {
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',],
-    "install_requires": ['h5py>=2.7.1', 'numpy>=1.8.1'],
+    "install_requires": ['h5py>=2.7.1', 'numpy>=1.8.1', 'matplotlib>=2.0.0'],
     "packages": [__name__]}

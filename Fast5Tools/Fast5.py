@@ -10,6 +10,7 @@ import warnings
 # Third party imports
 import numpy as np
 import h5py
+from matplotlib import pyplot as pl
 
 #~~~~~~~~~~~~~~ERROR DEFINITION~~~~~~~~~~~~~~#
 class Fast5Error (Exception):
@@ -163,6 +164,42 @@ class Fast5 (object):
     def n_events (self):
         if self.basecall_found:
             return len(self.events)
+
+    #~~~~~~~~~~~~~~PUBLIC METHODS~~~~~~~~~~~~~~#
+
+    def plot_raw (self, kmer_boundaries=True, events_boundary=True, **kwargs):
+        """
+        Plot raw signal and kmers/events boundaries
+        """
+
+        ax = pl.subplot()
+        _ = ax.plot(self.raw, color="gray", linewidth=0.5)
+
+        if self.basecall_found:
+            ymin, ymax = ax.get_ylim()
+
+            if kmer_boundaries:
+                y1, y2 = ymax, ymax+((ymax-ymin)/10)
+                for start, end in self.kmers[["start","end"]]:
+                    if not start==end:
+                        _ = ax.vlines(x=start, ymin=y1, ymax=y2, linewidth=0.5, color='green')
+                        _ = ax.vlines(x=end, ymin=y1, ymax=y2, linewidth=0.5, color='green')
+
+            if events_boundary:
+                y1, y2 = ymin-((ymax-ymin)/10), ymin
+                for start, length in self.events[["start","length"]]:
+                    _ = ax.vlines(x=start, ymin=y1, ymax=y2, linewidth=0.5, color='red')
+                    _ = ax.vlines(x=start+length, ymin=y1, ymax=y2, linewidth=0.5, color='red')
+
+        _ = ax.set_xlim(0, len(self.raw))
+        _ = ax.set_title ("File:{}, Mean Qual:{}, N kmers:{}, N signals:{}, N raw:{}".format (
+            self.fast5_file,
+            round(self.mean_qual, 2),
+            self.n_kmers,
+            self.n_events,
+            self.n_raw))
+
+        return ax
 
     #~~~~~~~~~~~~~~CLASS METHODS~~~~~~~~~~~~~~#
     @classmethod
