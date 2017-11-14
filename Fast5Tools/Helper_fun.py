@@ -56,3 +56,5 @@ def find_fast5_files_list (fast5_dir, shuffle_files=False, max_files=None, **kwa
         fast5_list= sample(fast5_list, max_files)
 
     return fast5_list
+
+find_fast5_files_list("./")
