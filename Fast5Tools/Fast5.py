@@ -192,11 +192,12 @@ class Fast5 (object):
                     _ = ax.vlines(x=start+length, ymin=y1, ymax=y2, linewidth=0.5, color='red')
 
         _ = ax.set_xlim(0, len(self.raw))
-        _ = ax.set_title ("Mean Qual:{}, N kmers:{}, N signals:{}, N raw:{}".format (
-            round(self.mean_qual, 2),
-            self.n_kmers,
-            self.n_events,
-            self.n_raw))
+
+        if self.basecall_found:
+            _ = ax.set_title ("Mean Qual:{}, N kmers:{}, N signals:{}, N raw:{}".format (
+                round(self.mean_qual, 2), self.n_kmers, self.n_events, self.n_raw))
+        else:
+            _ = ax.set_title ("N raw:{}".format (self.n_raw))
 
         return ax
 
