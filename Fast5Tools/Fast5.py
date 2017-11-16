@@ -5,7 +5,6 @@
 from copy import deepcopy
 import os
 import sys
-import warnings
 
 # Third party imports
 import numpy as np
@@ -30,24 +29,23 @@ class Fast5 (object):
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
     def __init__(self,
         fast5_file,
-        raw_required=True,
-        basecall_required=True,
         analyses_group='Basecall_1D_000',
         raw_read_num=0,
         min_read_qual=None,
         min_len=None,
         max_len=None,
         kmer_len=5,
+        basecall_required=True,
+        smooth_raw_signal = False,
+        smoothing_win_size = 10,
+        smoothing_win_step = 5,
+        verbose=False,
         **kwargs):
         """
         Parse a Fast5 file basecalled by albacore 2.0+ with h5py and extract the datasets raw, events and fastq.
         The sequence and quality are extracted from the fastq and the event array is collapsed per contiguous kmers
         * fast5_file: STR
             Path to a fast5 file basecalled by albacore 2.0+
-        * raw_required: BOOL (default True)
-            if True will raise an error if no raw value found
-        * basecall_required: BOOL (default True)
-            if True will raise an error if no basecall value found
         * analyses_group: STR (default Basecall_1D_000)
             Name of the basecall analyses group in the fast5 file. If None the no basecall values will be fetched
         * raw_read_num: INT (default 0)
@@ -60,76 +58,92 @@ class Fast5 (object):
             Maximal read lenth. If longer, raise a Fast5Error Exception
         * kmer_len: INT (default 5)
             Length of the kmers in the input data
+        * basecall_required: BOOL (default True)
+            if True will raise an error if no basecall value found
+        * smooth_raw_signal: BOOL (default False)
+            If True the raw signal will be smoothed and shrink using a moving median window
+        * smoothing_win_size: INT (default 10)
+            Length of the window used to smooth the raw signal
+        * smoothing_win_step: INT (default 5)
+            Step of the window used to smooth the raw signal
         """
         # Option self variables
         self.fast5_file = fast5_file
-        self.kmer_len = kmer_len
-        self.raw_required = raw_required
-        self.basecall_required = basecall_required
 
-        # Status self variables
-        self.raw_found = False
-        self.basecall_found = False
+        # Private self variable
+        self._smoothing_win_size = smoothing_win_size
+        self._smoothing_win_step = smoothing_win_step
+        self._kmer_len = kmer_len
+        self._smooth_raw_signal = smooth_raw_signal
 
-        # Check file Readability
+        # Check args
         if not os.access(self.fast5_file, os.R_OK):
             raise Fast5Error ("Invalid File")
 
+        if verbose: print("Read Fast5 File")
         # Parse the fast5 file
         with h5py.File(fast5_file, "r") as f:
+
             # Get raw values
             try:
                 self.raw = list(f['/Raw/Reads'].values())[raw_read_num]['Signal'].value
-                self.raw_found = True
+                if verbose: print("\tFound raw values")
             except (KeyError, IndexError, TypeError) as E:
-                if self.raw_required:
-                    raise Fast5Error ("No Raw Value")
+                raise Fast5Error ("No Raw Value")
+
             # Get basecall values
             try:
-                self.events = f['/Analyses/{}/BaseCalled_template/Events'.format(analyses_group)].value ## No reason to keep in mem, other than for verification
-                self.fastq = f['/Analyses/{}/BaseCalled_template/Fastq'.format(analyses_group)].value
-                self.basecall_found = True
+                events = f['/Analyses/{}/BaseCalled_template/Events'.format(analyses_group)].value
+                fastq = f['/Analyses/{}/BaseCalled_template/Fastq'.format(analyses_group)].value
+                self._basecall_found = True
+                if verbose: print("\tFound basecalling values")
             except (KeyError) as E:
-                if self.basecall_required:
+                self._basecall_found = False
+                if basecall_required:
                     raise Fast5Error ("No Basecall Value")
 
         # Processing of basecall values
-        if self.basecall_found:
-            # Extract info from fastq sequence
-            fastq_split = self.fastq.decode("utf8").split("\n")
+        if self._basecall_found:
+            if verbose: print("Process collected basecalling information")
+
+            # Extract info from fastq sequence and check quality and length
+            if verbose: print("\tExtract information from fastq sequence")
+            fastq_split = fastq.decode("utf8").split("\n")
             self.seq = fastq_split[1]
-            self.qual_str = fastq_split[3] ## No reason to keep in mem, other than for verification
-            self.qual = self.qual_str_to_array (self.qual_str)
-            # Check quality and length
+            self.qual = self.qual_str_to_array (fastq_split[3])
             if min_read_qual and self.qual.mean() < min_read_qual:
                 raise Fast5Error ("Low quality")
             if min_len and len(self.seq) < min_len:
                 raise Fast5Error ("Short Sequence")
             if max_len and len(self.seq) > max_len:
                 raise Fast5Error ("Long Sequence")
-            # Collapse events per kmers and reconstitute missing kmers
-            try:
-                self.kmers = self.events_to_kmers (events = self.events, kmer_len= self.kmer_len)
-            except Exception as E: ## Unsafe = define the possible errors
-                raise Fast5Error ("Kmers collapsing Error")
+
+            # Collapse events to kmers
+            if verbose: print("\tCollapse events per kmers")
+            self.kmers = self._events_to_kmers(events=events, kmer_len=self._kmer_len)
+
+        # Smooth raw signal if required
+        if smooth_raw_signal:
+            if verbose: print("\tSmooth raw signal")
+            self._raw_signal_smoothing(win_size=self._smoothing_win_size, win_step=self._smoothing_win_step)
+
+            assert self.kmers["end"][-1]+1 <= self.n_raw, "Error, kmer end cannot be longer than raw list"
 
     def __repr__(self):
         """ Readable description of the object """
         m="[{}] file:{}\n".format(self.__class__.__name__, self.fast5_file)
-        if self.raw_found:
-            m +="\tCount Raw signals: {}\n".format(self.n_raw)
-        if self.basecall_found:
+        m +="\tCount Raw signals: {}\n".format(self.n_raw)
+        if self._basecall_found:
             m +="\tSequence: {}...\n".format(self.seq[0:25])
             m +="\tMean Read Qual: {}\n".format(round(self.mean_qual, 2))
-            m +="\tCount Events: {}\n".format(self.n_events)
             m +="\tCount Kmers: {}\n".format(self.n_kmers)
             m +="\tCount Empty Kmers: {}\n".format(self.n_empty_kmers)
         return (m)
 
-    #~~~~~~~~~~~~~~PROPERTIES~~~~~~~~~~~~~~#
+    #~~~~~~~~~~~~~~PROPERTY METHODS~~~~~~~~~~~~~~#
     @property
     def seq_from_kmers (self):
-        if self.basecall_found:
+        if self._basecall_found:
             s=""
             for k in self.kmers:
                 s = k["seq"][0]+s
@@ -137,73 +151,86 @@ class Fast5 (object):
 
     @property
     def seq_len (self):
-        if self.basecall_found:
+        if self._basecall_found:
             return len(self.seq)
 
     @property
     def mean_qual (self):
-        if self.basecall_found:
+        if self._basecall_found:
             return self.qual.mean()
 
     @property
     def n_kmers (self):
-        if self.basecall_found:
+        if self._basecall_found:
             return len(self.kmers)
 
     @property
     def n_empty_kmers (self):
-        if self.basecall_found:
+        if self._basecall_found:
             return (self.kmers["empty"]==True).sum()
 
     @property
     def n_raw (self):
-        if self.raw_found:
-            return len(self.raw)
-
-    @property
-    def n_events (self):
-        if self.basecall_found:
-            return len(self.events)
+        return len(self.raw)
 
     #~~~~~~~~~~~~~~PUBLIC METHODS~~~~~~~~~~~~~~#
-
-    def plot_raw (self, kmer_boundaries=True, events_boundary=True, **kwargs):
+    def plot_raw (self, kmer_boundaries=True, **kwargs):
         """
-        Plot raw signal and kmers/events boundaries
+        Plot raw signal and kmers boundaries
         """
 
+        # Plot the raw signal
         ax = pl.subplot()
         _ = ax.plot(self.raw, color="gray", linewidth=0.5)
-
-        if self.basecall_found:
-            ymin, ymax = ax.get_ylim()
-
-            if kmer_boundaries:
-                y1, y2 = ymax, ymax+((ymax-ymin)/10)
-                for start, end in self.kmers[["start","end"]]:
-                    if not start==end:
-                        _ = ax.vlines(x=start, ymin=y1, ymax=y2, linewidth=0.5, color='green')
-                        _ = ax.vlines(x=end, ymin=y1, ymax=y2, linewidth=0.5, color='green')
-
-            if events_boundary:
-                y1, y2 = ymin-((ymax-ymin)/10), ymin
-                for start, length in self.events[["start","length"]]:
-                    _ = ax.vlines(x=start, ymin=y1, ymax=y2, linewidth=0.5, color='red')
-                    _ = ax.vlines(x=start+length, ymin=y1, ymax=y2, linewidth=0.5, color='red')
-
         _ = ax.set_xlim(0, len(self.raw))
 
-        if self.basecall_found:
-            _ = ax.set_title ("Mean Qual:{}, N kmers:{}, N signals:{}, N raw:{}".format (
-                round(self.mean_qual, 2), self.n_kmers, self.n_events, self.n_raw))
-        else:
-            _ = ax.set_title ("N raw:{}".format (self.n_raw))
+        # Plot Kmer boundaries if required and available
+        if kmer_boundaries and self._basecall_found:
+            ymin, ymax = ax.get_ylim()
+            y1, y2 = ymax, ymax+((ymax-ymin)/10)
+
+            for row in self.kmers:
+                if not row["empty"]:
+                    _ = ax.vlines(x=row["start"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
+                    _ = ax.vlines(x=row["end"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
+
+        # Define title
+        title = "Raw:{:,}".format (self.n_raw)
+        if self._basecall_found:
+            title+= "   Kmers:{:,}   Empty kmers:{:,}   Mean Qual:{}".format (
+                self.n_kmers, self.n_empty_kmers, round(self.mean_qual, 2))
+        if self._smooth_raw_signal:
+            title+= "   Smooth Win Size:{}   Smooth Win Step:{:,}".format (
+                self._smoothing_win_size, self._smoothing_win_step)
+        _ = ax.set_title (title)
 
         return ax
 
-    #~~~~~~~~~~~~~~CLASS METHODS~~~~~~~~~~~~~~#
-    @classmethod
-    def events_to_kmers (cls, events, kmer_len=5, **kwargs):
+    #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
+    def _raw_signal_smoothing (self, win_size=5, win_step=2, **kwargs):
+        """
+        Smooth the raw signal using a moving median window.
+        """
+        # Init vals
+        n_smoothed_raw = ((self.n_raw-win_size)//win_step)+1
+        smoothed_raw = np.empty (dtype=np.int32, shape=n_smoothed_raw)
+
+        # Iterate window by window over the raw value array and compute the median for each
+        for i, j in enumerate (np.arange (0, self.n_raw-win_size+1, win_step)):
+            smoothed_raw [i] = np.median(self.raw[j:j+win_size])
+        self.raw = smoothed_raw
+
+        # Rephase the kmers with the signal if the win_step is more than 1
+        if self._basecall_found and win_step > 1:
+            self.kmers["start"] = self.kmers["start"]//win_step
+            self.kmers["end"] = self.kmers["end"]//win_step
+            # Corect kmers with index higher that the new raw number, if the last window doesn't reach the end
+            # Update the number of empty kmers
+            self.kmers["start"][self.kmers["start"] >= self.n_raw] = self.n_raw-1
+            self.kmers["end"][self.kmers["end"] >= self.n_raw] = self.n_raw-1
+            self.kmers["empty"][self.kmers["start"] == self.kmers["end"]] = True
+
+    def _events_to_kmers (self, events, kmer_len=5, **kwargs):
         """
         Iterate over the event dataframe and merge together contiguous events with the same kmer (move 0).
         Missing kmers are infered from the previous and current kmer sequences.
