@@ -184,15 +184,28 @@ class Fast5 (object):
         return len(self.raw)
 
     #~~~~~~~~~~~~~~PUBLIC METHODS~~~~~~~~~~~~~~#
-    def plot_raw (self, kmer_boundaries=True, **kwargs):
+    def plot_raw (self, start=None, end=None, kmer_boundaries=True, **kwargs):
         """
         Plot raw signal and kmers boundaries
-        """
+        * start INT
+            If defined the raw plot will start at that value
+        * end INT
+            If defined the raw plot will end at that value
+        * kmer_boundaries bool
+            If True the start and end position of each kmer will be indicated by vertical lines on the graph"""
+
+        # define start and end boundaries + excact data
+        if not start:
+            start = 0
+        if not end:
+            end=len(self.raw)
+        raw = self.raw [start:end]
+        x_scale = range(start, end)
 
         # Plot the raw signal
         ax = pl.subplot()
-        _ = ax.plot(self.raw, color="gray", linewidth=0.5)
-        _ = ax.set_xlim(0, len(self.raw))
+        _ = ax.plot (x_scale, raw, color="gray", linewidth=0.5)
+        _ = ax.set_xlim(start, end)
 
         # Plot Kmer boundaries if required and available
         if kmer_boundaries and self._basecall_found:
@@ -201,8 +214,12 @@ class Fast5 (object):
 
             for row in self.kmers:
                 if not row["empty"]:
-                    _ = ax.vlines(x=row["start"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
-                    _ = ax.vlines(x=row["end"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
+                    if start:
+                        _ = ax.vlines(x=row["start"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
+                        _ = ax.vlines(x=row["end"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
+                    else:
+                        _ = ax.vlines(x=row["start"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
+                        _ = ax.vlines(x=row["end"], ymin=y1, ymax=y2, linewidth=0.5, color='green')
 
         # Define title
         title = "Raw:{:,}".format (self.n_raw)
