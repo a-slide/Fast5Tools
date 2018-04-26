@@ -9,7 +9,7 @@ import sys
 # Third party imports
 import numpy as np
 import h5py
-from matplotlib import pyplot as pl
+from matplotlib import pylot as pl
 
 #~~~~~~~~~~~~~~ERROR DEFINITION~~~~~~~~~~~~~~#
 class Fast5Error (Exception):
@@ -36,6 +36,7 @@ class Fast5 (object):
         max_len=None,
         kmer_len=5,
         basecall_required=True,
+        zscore_norm = False,
         smooth_raw_signal = False,
         smoothing_win_size = 10,
         smoothing_win_step = 5,
@@ -60,6 +61,8 @@ class Fast5 (object):
             Length of the kmers in the input data
         * basecall_required: BOOL (default True)
             if True will raise an error if no basecall value found
+        * zscore_norm: BOOL (default False)
+            If True the raw will be normalized using the zscore formula
         * smooth_raw_signal: BOOL (default False)
             If True the raw signal will be smoothed and shrink using a moving median window
         * smoothing_win_size: INT (default 10)
@@ -75,6 +78,7 @@ class Fast5 (object):
         self._smoothing_win_step = smoothing_win_step
         self._kmer_len = kmer_len
         self._smooth_raw_signal = smooth_raw_signal
+        self._zscore_norm = zscore_norm
 
         # Check args
         if not os.access(self.fast5_file, os.R_OK):
@@ -110,7 +114,7 @@ class Fast5 (object):
             if verbose: print("\tExtract information from fastq sequence")
             fastq_split = fastq.decode("utf8").split("\n")
             self.seq = fastq_split[1]
-            self.qual = self.qual_str_to_array (fastq_split[3])
+            self.qual = self._qual_str_to_array (fastq_split[3])
             if min_read_qual and self.qual.mean() < min_read_qual:
                 raise Fast5Error ("Low quality")
             if min_len and len(self.seq) < min_len:
@@ -122,12 +126,18 @@ class Fast5 (object):
             if verbose: print("\tCollapse events per kmers")
             self.kmers = self._events_to_kmers(events=events, kmer_len=self._kmer_len)
 
-        # Smooth raw signal if required
-        if smooth_raw_signal:
-            if verbose: print("\tSmooth raw signal")
-            self._raw_signal_smoothing(win_size=self._smoothing_win_size, win_step=self._smoothing_win_step)
+        # zscore normalisation is required
+        if self._zscore_norm:
+            if verbose: print("\tRaw signal zscore normalisation")
+            self.raw = (self.raw-self.raw.mean())/self.raw.std()
 
-            assert self.kmers["end"][-1]+1 <= self.n_raw, "Error, kmer end cannot be longer than raw list"
+        # Smooth raw signal if required
+        if self._smooth_raw_signal:
+            if verbose: print("\tSmooth raw signal")
+            self.raw = self._raw_signal_smoothing (raw=self.raw, win_size=self._smoothing_win_size, win_step=self._smoothing_win_step)
+            # Rephase the kmers with the signal if the win_step is more than 1
+            if self._basecall_found and self._smoothing_win_step > 1:
+                self.kmers = self._kmer_rephasing (kmers=self.kmers, n_raw=self.n_raw, win_step=self._smoothing_win_step)
 
     def __repr__(self):
         """ Readable description of the object """
@@ -207,30 +217,35 @@ class Fast5 (object):
         return ax
 
     #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
-    def _raw_signal_smoothing (self, win_size=5, win_step=2, **kwargs):
-        """
-        Smooth the raw signal using a moving median window.
+    @classmethod
+    def _raw_signal_smoothing (cls, raw, win_size=5, win_step=2, **kwargs):
+        """ Smooth the raw signal using a moving median window.
         """
         # Init vals
-        n_smoothed_raw = ((self.n_raw-win_size)//win_step)+1
-        smoothed_raw = np.empty (dtype=np.int32, shape=n_smoothed_raw)
+        n_raw = len(raw)
+        n_smoothed_raw = ((n_raw-win_size)//win_step)+1
+        smoothed_raw = np.empty (dtype=raw.dtype, shape=n_smoothed_raw)
 
         # Iterate window by window over the raw value array and compute the median for each
-        for i, j in enumerate (np.arange (0, self.n_raw-win_size+1, win_step)):
-            smoothed_raw [i] = np.median(self.raw[j:j+win_size])
-        self.raw = smoothed_raw
+        for i, j in enumerate (np.arange (0, n_raw-win_size+1, win_step)):
+            smoothed_raw [i] = np.median(raw[j:j+win_size])
+        return smoothed_raw
 
-        # Rephase the kmers with the signal if the win_step is more than 1
-        if self._basecall_found and win_step > 1:
-            self.kmers["start"] = self.kmers["start"]//win_step
-            self.kmers["end"] = self.kmers["end"]//win_step
-            # Corect kmers with index higher that the new raw number, if the last window doesn't reach the end
-            # Update the number of empty kmers
-            self.kmers["start"][self.kmers["start"] >= self.n_raw] = self.n_raw-1
-            self.kmers["end"][self.kmers["end"] >= self.n_raw] = self.n_raw-1
-            self.kmers["empty"][self.kmers["start"] == self.kmers["end"]] = True
+    @classmethod
+    def _kmer_rephasing (cls, kmers, n_raw, win_step=2, **kwargs):
+        """ Rephase kmers coordinates with signal after signal smoothing
+        """
+        kmers["start"] = kmers["start"]//win_step
+        kmers["end"] = kmers["end"]//win_step
+        # Corect kmers with index higher that the new raw number, if the last window doesn't reach the end
+        kmers["start"][kmers["start"] >= n_raw] = n_raw-1
+        kmers["end"][kmers["end"] >= n_raw] = n_raw-1
+        # Update the number of empty kmers
+        kmers["empty"][kmers["start"] == kmers["end"]] = True
+        return kmers
 
-    def _events_to_kmers (self, events, kmer_len=5, **kwargs):
+    @classmethod
+    def _events_to_kmers (cls, events, kmer_len=5, **kwargs):
         """
         Iterate over the event dataframe and merge together contiguous events with the same kmer (move 0).
         Missing kmers are infered from the previous and current kmer sequences.
@@ -277,7 +292,7 @@ class Fast5 (object):
         return kmers
 
     @classmethod
-    def qual_str_to_array (cls, qual_str):
+    def _qual_str_to_array (cls, qual_str):
         """ Convert a sanger encoded quality string into a numpy int array. """
         qual = np.zeros(shape=len(qual_str), dtype=np.uint32)
         for i, q in enumerate(qual_str):
