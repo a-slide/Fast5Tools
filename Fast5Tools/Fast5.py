@@ -9,7 +9,7 @@ import sys
 # Third party imports
 import numpy as np
 import h5py
-from matplotlib import pylot as pl
+from matplotlib import pyplot as pl
 
 #~~~~~~~~~~~~~~ERROR DEFINITION~~~~~~~~~~~~~~#
 class Fast5Error (Exception):
