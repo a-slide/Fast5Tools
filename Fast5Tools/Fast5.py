@@ -67,7 +67,7 @@ class Fast5 (object):
                 raise Fast5Error ("No Raw Value")
 
             # Get basecall values
-            if self.basecall
+            if self.basecall:
                 try:
                     fastq = f['/Analyses/{}/BaseCalled_template/Fastq'.format (analyses_group)].value.decode("utf8").split ("\n")
                     self.seq = fastq[1]
@@ -78,7 +78,7 @@ class Fast5 (object):
                     raise Fast5Error ("No Basecall Value")
 
             # Get Metadata values
-            if self.metadata
+            if self.metadata:
                 try:
                     self.context_tags = OrderedDict()
                     for i, j in f['UniqueGlobalKey']["context_tags"].attrs.items():
