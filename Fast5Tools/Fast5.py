@@ -32,6 +32,8 @@ class Fast5 (object):
         fast5_fn,
         analyses_group='Basecall_1D_000',
         raw_read_num=0,
+        basecall = False,
+        metadata = False,
         verbose=False,
         **kwargs):
         """
@@ -46,6 +48,8 @@ class Fast5 (object):
         """
         # Option self variables
         self.fast5_fn = fast5_fn
+        self.basecall = basecall
+        self.metadata = metadata
 
         # Check args
         if not os.access(self.fast5_fn, os.R_OK):
@@ -63,75 +67,73 @@ class Fast5 (object):
                 raise Fast5Error ("No Raw Value")
 
             # Get basecall values
-            try:
-                fastq = f['/Analyses/{}/BaseCalled_template/Fastq'.format (analyses_group)].value.decode("utf8")
-                events = f['/Analyses/{}/BaseCalled_template/Events'.format (analyses_group)].value
-            except (KeyError) as E:
-                raise Fast5Error ("No Basecall Value")
+            if self.basecall
+                try:
+                    fastq = f['/Analyses/{}/BaseCalled_template/Fastq'.format (analyses_group)].value.decode("utf8").split ("\n")
+                    self.seq = fastq[1]
+                    self.qual = self._qual_str_to_array (fastq[3])
+                    events = f['/Analyses/{}/BaseCalled_template/Events'.format (analyses_group)].value
+                    self.kmers = self._events_to_kmers (events=events)
+                except (KeyError) as E:
+                    raise Fast5Error ("No Basecall Value")
 
             # Get Metadata values
-            try:
-                self.context_tags = OrderedDict()
-                for i, j in f['UniqueGlobalKey']["context_tags"].attrs.items():
-                    self.context_tags[i] = j.decode("utf8") if type(j) == np.bytes_ else j
-                self.channel_id = OrderedDict()
-                for i, j in f['UniqueGlobalKey']["channel_id"].attrs.items():
-                    self.channel_id[i] = j.decode("utf8") if type(j) == np.bytes_ else j
-                self.tracking_id = OrderedDict()
-                for i, j in f['UniqueGlobalKey']["tracking_id"].attrs.items():
-                    self.tracking_id[i] = j.decode("utf8") if type(j) == np.bytes_ else j
-            except (KeyError) as E:
-                raise Fast5Error ("No Metadata values")
-
-        # Processing of basecall values
-        if verbose: print ("Process collected basecalling information")
-
-        # Extract info from fastq sequence and check quality and length
-        if verbose: print ("\tExtract information from fastq sequence")
-        fastq_split = fastq.split ("\n")
-        self.seq = fastq_split[1]
-        self.qual = self._qual_str_to_array (fastq_split[3])
-
-        # Collapse events to kmers
-        if verbose: print ("\tCollapse events per kmers")
-        self.kmers = self._events_to_kmers (events=events)
+            if self.metadata
+                try:
+                    self.context_tags = OrderedDict()
+                    for i, j in f['UniqueGlobalKey']["context_tags"].attrs.items():
+                        self.context_tags[i] = j.decode("utf8") if type(j) == np.bytes_ else j
+                    self.channel_id = OrderedDict()
+                    for i, j in f['UniqueGlobalKey']["channel_id"].attrs.items():
+                        self.channel_id[i] = j.decode("utf8") if type(j) == np.bytes_ else j
+                    self.tracking_id = OrderedDict()
+                    for i, j in f['UniqueGlobalKey']["tracking_id"].attrs.items():
+                        self.tracking_id[i] = j.decode("utf8") if type(j) == np.bytes_ else j
+                except (KeyError) as E:
+                    raise Fast5Error ("No Metadata values")
 
     def __repr__(self):
         """ Readable description of the object """
         m="[{}] file:{}\n".format(self.__class__.__name__, self.fast5_fn)
         m +="\tRead ID: {}\n".format(self.read_id)
         m +="\tCount Raw signals: {}\n".format(self.n_raw)
-        m +="\tSequence: {}...\n".format(self.seq[0:25])
-        m +="\tMean Read Qual: {}\n".format(round(self.mean_qual, 2))
-        m +="\tCount Kmers: {}\n".format(self.n_kmers)
-        m +="\tCount Empty Kmers: {}\n".format(self.n_empty_kmers)
+        if self.basecall:
+            m +="\tSequence: {}...\n".format(self.seq[0:25])
+            m +="\tMean Read Qual: {}\n".format(round(self.mean_qual, 2))
+            m +="\tCount Kmers: {}\n".format(self.n_kmers)
+            m +="\tCount Empty Kmers: {}\n".format(self.n_empty_kmers)
         return (m)
 
     #~~~~~~~~~~~~~~PROPERTY METHODS~~~~~~~~~~~~~~#
     @property
     def seq_from_kmers (self):
-        s=""
-        s += self.kmers [0]["seq"][:2]
-        for k in self.kmers:
-            s += k["seq"][2]
-        s += self.kmers [-1]["seq"][3:]
-        return s[::-1]
+        if self.basecall:
+            s=""
+            s += self.kmers [0]["seq"][:2]
+            for k in self.kmers:
+                s += k["seq"][2]
+            s += self.kmers [-1]["seq"][3:]
+            return s[::-1]
 
     @property
     def seq_len (self):
-        return len(self.seq)
+        if self.basecall:
+            return len(self.seq)
 
     @property
     def mean_qual (self):
-        return self.qual.mean()
+        if self.basecall:
+            return self.qual.mean()
 
     @property
     def n_kmers (self):
-        return len(self.kmers)
+        if self.basecall:
+            return len(self.kmers)
 
     @property
     def n_empty_kmers (self):
-        return (self.kmers["len"]==0).sum()
+        if self.basecall:
+            return (self.kmers["len"]==0).sum()
 
     @property
     def n_raw (self):
@@ -182,7 +184,7 @@ class Fast5 (object):
             _ = ax.plot (x_scale, raw, color="gray", linewidth=0.5, zorder=1)
 
             #Plot Kmer boundaries if required and available
-            if kmer_boundaries:
+            if self.basecall and kmer_boundaries:
                 ymin, ymax = ax.get_ylim()
                 y1, y2 = ymax, ymax+((ymax-ymin)/10)
 
