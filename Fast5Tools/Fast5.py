@@ -18,9 +18,9 @@ class Fast5Error (Exception):
     """
     def __init__(self, *args, **kwargs):
         if not args:
-            self.val="default error"
+            self.err_msg="default Fast5Error"
         else:
-            self.val=args[0]
+            self.err_msg=args[0]
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Fast5 (object):

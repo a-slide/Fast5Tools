@@ -3,6 +3,7 @@
 #~~~~~~~~~~~~~~IMPORTS~~~~~~~~~~~~~~#
 # Standard library imports
 import os
+import sys
 from glob import iglob
 
 #~~~~~~~~~~~~~~FUNCTIONS~~~~~~~~~~~~~~#
@@ -27,3 +28,9 @@ def find_fast5_files_gen (fast5_dir, **kwargs):
             for item in os.listdir(fast5_dir):
                 for fast5 in find_fast5_files_gen (os.path.join(fast5_dir, item)):
                     yield fast5
+
+def stdout_print (*args):
+    """reproduce print with stdout.write
+    """
+    sys.stdout.write(" ".join(str(a) for a in args))
+    sys.stdout.flush()
