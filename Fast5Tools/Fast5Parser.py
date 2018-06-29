@@ -5,8 +5,8 @@
 # Standard library imports
 import multiprocessing as mp
 import sys
-
 import os
+from glob import iglob
 from time import time
 from collections import Counter
 import argparse
@@ -16,13 +16,9 @@ import shelve
 import numpy as np
 
 # Local imports
-try:
-    from Fast5Tools import __version__
-    from Fast5Tools.Helper_fun import find_fast5_files_gen, stdout_print
-    from Fast5Tools.Fast5 import Fast5, Fast5Error
-except (NameError, ImportError):
-    print ("Can not import a local packages. Verify source code directory")
-    sys.exit(0)
+from Fast5Tools import __version__
+from Fast5Tools.Helper_fun import stdout_print
+from Fast5Tools.Fast5 import Fast5, Fast5Error
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Fast5Parser ():
@@ -33,10 +29,9 @@ class Fast5Parser ():
     def __init__ (self,
         fast5_dir,
         output_db_file,
-        analyses_group = 'Basecall_1D_000',
-        raw_read_num = 0,
-        basecall = False,
-        metadata = False,
+        basecall_group='Basecall_1D_000',
+        raw_read_num=0,
+        error_on_missing_basecall=True,
         threads = 4,
         verbose = False,
         **kwargs):
@@ -47,7 +42,7 @@ class Fast5Parser ():
             Path to the folder containing Fast5 files (can be in multiple subfolder)
         * output_db_file: STR
             Path to a directory, where to store the results and logs
-        * analyses_group: STR (default 'Basecall_1D_000')
+        * basecall_group: STR (default 'Basecall_1D_000')
             Name of the analysis group in the fast5 file containing the basecalling information
         * raw_read_num: INT (default 0)
             Index of the read in the Raw group
@@ -62,15 +57,14 @@ class Fast5Parser ():
 
         # Fast5 option
         self.fast5_dir = os.path.abspath(fast5_dir)
-        self.analyses_group = analyses_group
+        self.basecall_group = basecall_group
         self.raw_read_num = raw_read_num
 
         # Other options
         self.threads = threads
         self.fast5_worker_threads = threads-2
         self.verbose = verbose
-        self.basecall = basecall
-        self.metadata = metadata
+        self.error_on_missing_basecall = error_on_missing_basecall
         self.output_db_file = output_db_file
 
     def __call__ (self):
@@ -107,13 +101,35 @@ class Fast5Parser ():
 
     #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 
+    def _fast5_files_generator (self, fast5_dir, **kwargs):
+        """
+        Generator returning fast5 files found recursively starting from a given folder.
+        The recursivity stops as soon as a file matching the extension is found.
+        * fast5_dir: STR
+            Path to the folder containing Fast5 files (can be in multiple subfolder)
+        """
+        # In the case where the folder is a file
+        if os.path.isdir(fast5_dir):
+
+            # If matching files in the folder
+            fast5_found=False
+            for fast5 in iglob (os.path.join(fast5_dir, "*.fast5")):
+                yield fast5
+                fast5_found=True
+
+            # If no matching file go deeper until a leaf containing fast5 is found
+            if not fast5_found:
+                for item in os.listdir(fast5_dir):
+                    for fast5 in self._fast5_files_generator (os.path.join(fast5_dir, item)):
+                        yield fast5
+
     def _fast5_list_worker (self, fast5_fn_q):
         """
         Mono-threaded worker adding fast5 file found througout a directory tree
         to a feeder queue for the multiprocessing processing workers
         """
         # Load an input Queue with fast5 file path
-        for fast5_fn in find_fast5_files_gen (fast5_dir = self.fast5_dir):
+        for fast5_fn in self._fast5_files_generator (fast5_dir = self.fast5_dir):
             fast5_fn_q.put(fast5_fn)
 
         # Add 1 poison pill per worker thread
@@ -132,10 +148,9 @@ class Fast5Parser ():
             try:
                 f = Fast5 (
                     fast5_fn = fast5_fn,
-                    analyses_group = self.analyses_group,
+                    basecall_group = self.basecall_group,
                     raw_read_num = self.raw_read_num,
-                    basecall = self.basecall,
-                    metadata = self.metadata)
+                    error_on_missing_basecall = self.error_on_missing_basecall)
                 fast5_obj_q.put (f)
 
             # If an error happened just put it in the out queue
@@ -189,7 +204,7 @@ def main ():
     parser.add_argument("-i", "--fast5_dir", required=True, help="Path to the folder containing Fast5 files")
     parser.add_argument("-o", "--output_db_file", required=True, help="Path to the output database file")
     # Optional args
-    parser.add_argument("--analyses_group", default='Basecall_1D_000', help="Name of the analysis group in the fast5 file containing the basecalling information")
+    parser.add_argument("--basecall_group", default='Basecall_1D_000', help="Name of the analysis group in the fast5 file containing the basecalling information")
     parser.add_argument("--raw_read_num", default=0, type=int, help="Index of the read in the Raw")
     parser.add_argument("--threads", default=4, type=int, help="Total number of threads. Minimum = 4")
     parser.add_argument("--verbose", default=False, type=bool, help="If True will be more chatty")
@@ -198,7 +213,7 @@ def main ():
     f = Fast5Parser(
         fast5_dir = a.fast5_dir,
         output_db_file=a.output_db_file,
-        analyses_group = a.analyses_group,
+        basecall_group = a.basecall_group,
         raw_read_num = a.raw_read_num,
         threads = a.threads,
         verbose = a.verbose)
