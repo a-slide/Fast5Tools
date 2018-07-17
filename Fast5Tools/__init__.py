@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Define self package variable
-__version__ = "0.2.a1"
+__version__ = "0.2.a3"
 __all__ = ["Fast5Parser", "Fast5", "Helper_fun"]
 
 description = 'Fast5 tools is a collection of tools to manipulate Fast5 files'
@@ -28,5 +28,5 @@ setup_dict = {
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',],
-    "install_requires": ['h5py>=2.7.1', 'numpy>=1.8.1', 'matplotlib>=2.0.0'],
+    "install_requires": ['h5py>=2.7.1', 'numpy>=1.8.1', 'matplotlib>=2.0.0', 'pysam>=0.13.0', 'tqdm>=4.23.4'],
     "packages": [__name__]}
