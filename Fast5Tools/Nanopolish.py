@@ -4,6 +4,7 @@
 # Standard library imports
 
 # Third party imports
+import numpy as np
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Nanopolish (object):

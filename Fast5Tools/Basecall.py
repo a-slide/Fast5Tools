@@ -9,19 +9,13 @@ import numpy as np
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Basecall (object):
     """
-    Represent and summarize basecalling informations
+    Represent and summarize basecalling informations from Albacore
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
-    def __init__(self,
-        name,
-        fastq,
-        events,
-        metadata,
-        **kwargs):
+    def __init__(self, fastq, events, metadata, **kwargs):
         """
         """
         # Self variables
-        self.name = name
         self.fastq = fastq
         self.events = events
         self.metadata = metadata
@@ -29,11 +23,13 @@ class Basecall (object):
 
     def __repr__(self):
         """ Readable description of the object """
-        m="\t[{}] {}\n".format(self.__class__.__name__, self.name)
-        m +="\t\tSequence: {}\n".format(self.fastq_seq[0:25])
-        m +="\t\tQuality: {}\n".format(self.fastq_qual[0:25])
+        m = ""
+        if self.seq_len > 50:
+            m +="\t\tSequence: {}...{}\n".format(self.fastq_seq[:25], self.fastq_seq[-25:])
+        else:
+            m +="\t\tSequence: {}\n".format(self.fastq_seq)
         m +="\t\tSequence length: {}\tEmpty kmers: {}\tMean quality: {}\n".format(
-            self.seq_len, self.n_empty_kmers, self.mean_qual)
+            self.seq_len, self.n_empty_kmers, round(self.mean_qual, 2))
         return (m)
 
     #~~~~~~~~~~~~~~PROPERTY METHODS~~~~~~~~~~~~~~#
