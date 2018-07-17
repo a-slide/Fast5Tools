@@ -13,8 +13,6 @@ from matplotlib import pyplot as pl
 
 # Local import
 from Fast5Tools.Basecall import Basecall
-from Fast5Tools.Alignment import Alignment
-from Fast5Tools.Nanopolish import Nanopolish
 
 #~~~~~~~~~~~~~~ERROR DEFINITION~~~~~~~~~~~~~~#
 class Fast5Error (Exception):
@@ -77,8 +75,7 @@ class Fast5 (object):
                 basecall_metadata = OrderedDict ()
                 for i, j in f["Analyses"][basecall_group].attrs.items():
                     basecall_metadata[i] = j.decode("utf8") if type(j) == np.bytes_ else j
-                self.analyses["Basecall"] = Basecall (
-                    name = "Albacore_basecalling",
+                self.analyses["Albacore_basecalling"] = Basecall (
                     fastq = fastq,
                     events = events,
                     metadata = basecall_metadata)
@@ -101,7 +98,8 @@ class Fast5 (object):
         m="[{}] file:{}\n".format(self.__class__.__name__, self.fast5_fn)
         m +="\tRead ID: {}\n".format(self.read_id)
         m +="\tCount Raw signals: {}\n".format(self.n_raw)
-        for analysis in self.analyses.values():
+        for analyses_name, analysis in self.analyses.items():
+            m += "\t{}\n".format(analyses_name)
             m += str(analysis)
         return (m)
 
@@ -164,11 +162,11 @@ class Fast5 (object):
             _ = ax.plot (x_scale, raw, color="gray", linewidth=0.5, zorder=1)
 
             #Plot Kmer boundaries if required and available
-            if "Basecall" in self.analyses and plot_basecall:
+            if "Albacore_basecalling" in self.analyses and plot_basecall:
                 ymin, ymax = ax.get_ylim()
                 y1, y2 = ymax, ymax+((ymax-ymin)/10)
 
-                for row in self.analyses["Basecall"].kmers:
+                for row in self.analyses["Albacore_basecalling"].kmers:
                     if row["len"] and row["end"] >= start and row["start"] <= end:
                         y = np.median (all_raw [row["start"]: row["end"]])
                         _ = ax.hlines (y=y, xmin=row["start"], xmax=row["end"], linewidth=1, color="red", zorder=2)
