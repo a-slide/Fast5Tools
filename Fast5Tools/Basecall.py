@@ -24,12 +24,12 @@ class Basecall (object):
     def __repr__(self):
         """ Readable description of the object """
         m = ""
-        if self.seq_len > 50:
-            m +="\t\tSequence: {}...{}\n".format(self.fastq_seq[:25], self.fastq_seq[-25:])
+        if self.seq_len > 20:
+            seq = "{}...{}".format(self.fastq_seq[:10], self.fastq_seq[-10:])
         else:
-            m +="\t\tSequence: {}\n".format(self.fastq_seq)
-        m +="\t\tSequence length: {}\tEmpty kmers: {}\tMean quality: {}\n".format(
-            self.seq_len, self.n_empty_kmers, round(self.mean_qual, 2))
+            seq = self.fastq_seq
+        m +="\t\tSeq: {} / Length: {} / Empty kmers: {} / Mean quality: {}\n".format(
+            seq, self.seq_len, self.n_empty_kmers, round(self.mean_qual, 2))
         return (m)
 
     #~~~~~~~~~~~~~~PROPERTY METHODS~~~~~~~~~~~~~~#

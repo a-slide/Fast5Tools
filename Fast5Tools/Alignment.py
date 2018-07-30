@@ -18,12 +18,12 @@ class Alignment (object):
         self.read_list = []
         self.nread = 0
 
-    def add_read (self, pysam_read):
+    def add_read (self, read, **kwargs):
         """"""
-        self.read_list.append (Read (pysam_read))
+        self.read_list.append (read)
         self.nread += 1
 
-    def best_read (self, based_on = "score"):
+    def best_read (self, based_on = "align_score"):
         """"""
         if self.nread == 0:
             return None
@@ -31,14 +31,14 @@ class Alignment (object):
         if self.nread == 1:
             return self.read_list [0]
 
-        if based_on == "score":
-            return sorted(self.read_list, key=lambda x: x.score, reverse=True)
+        if based_on == "align_score":
+            return sorted(self.read_list, key=lambda x: x.align_score, reverse=True)[0]
 
         elif based_on == "mapq":
-            return sorted(self.read_list, key=lambda x: x.mapq, reverse=True)
+            return sorted(self.read_list, key=lambda x: x.mapq, reverse=True)[0]
 
-        elif based_on == "rlen":
-            return sorted(self.read_list, key=lambda x: x.rlen, reverse=True)
+        elif based_on == "align_len":
+            return sorted(self.read_list, key=lambda x: x.align_len, reverse=True)[0]
 
     def __repr__(self):
         """ Readable description of the object """
@@ -53,24 +53,24 @@ class Read ():
     """
     #~~~~~~~~~~~~~~FUNDAMENTAL METHODS~~~~~~~~~~~~~~#
 
-    def __init__(self, pysam_read, **kwargs):
-        """ Store initial values and init counters
+    def __init__(self, qname, qlen, qstart, qend, rname, rlen, rstart, rend, strand, align_len, mapq, align_score=None, **kwargs):
         """
-        try:
-            self.qname = pysam_read.query_name
-            self.rname = pysam_read.reference_name
-            self.start = int (pysam_read.reference_start)+1
-            self.end = int (pysam_read.reference_end)
-            self.strand = "-" if pysam_read.is_reverse else "+"
-            self.rlen = int (pysam_read.infer_read_length())
-            self.mapq = int (pysam_read.mapping_quality)
-            self.flag = pysam_read.flag
-            self.score = int(pysam_read.get_tag("AS"))
-
-        except TypeError as E:
-            print (pysam_read)
-            print (E)
+        """
+        self.qname = qname
+        self.qlen = qlen
+        self.qstart = qstart
+        self.qend = qend
+        self.rname = rname
+        self.rlen = rlen
+        self.rstart = rstart
+        self.rend = rend
+        self.strand = strand
+        self.align_len = align_len
+        self.mapq = mapq
+        self.align_score = align_score
 
     def __repr__(self):
-        return "Reference:{}-{}:{}({})  Read length:{}  Mapq:{},  Score:{}  Flag:{}".format(
-            self.rname, self.start, self.end, self.strand, self.rlen, self.mapq, self.score, self.flag)
+        return "Query:{}-{}:{} ({} pb) / Reference:{}-{}:{}({}) ({} pb) / Alignment len:{} / Mapq:{} / Align Score:{}".format(
+            self.qname, self.qstart, self.qend, self.qlen,
+            self.rname, self.rstart, self.rend, self.strand, self.rlen,
+            self.align_len, self.mapq, self.align_score)
