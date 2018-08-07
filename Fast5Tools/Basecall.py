@@ -5,6 +5,7 @@
 
 # Third party imports
 import numpy as np
+import pandas as pd
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Basecall (object):
@@ -12,14 +13,13 @@ class Basecall (object):
     Represent and summarize basecalling informations from Albacore
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
-    def __init__(self, fastq, events, metadata, **kwargs):
+    def __init__(self, fastq, kmers, metadata, **kwargs):
         """
         """
         # Self variables
         self.fastq = fastq
-        self.events = events
         self.metadata = metadata
-        self.kmers = self._events_to_kmers (events=events)
+        self.kmers = kmers
 
     def __repr__(self):
         """ Readable description of the object """
@@ -30,7 +30,7 @@ class Basecall (object):
             seq = self.fastq_seq
         m +="\t\tSeq: {} / Length: {} / Empty kmers: {} / Mean quality: {}\n".format(
             seq, self.seq_len, self.n_empty_kmers, round(self.mean_qual, 2))
-        return (m)
+        return m
 
     #~~~~~~~~~~~~~~PROPERTY METHODS~~~~~~~~~~~~~~#
     @property
@@ -64,46 +64,8 @@ class Basecall (object):
 
     @property
     def n_empty_kmers (self):
-        return (self.kmers["len"]==0).sum()
+        return np.isnan(self.kmers["mean"]).sum()
 
-    #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
-
-    @classmethod
-    def _events_to_kmers (cls, events, **kwargs):
-        """
-        Iterate over the event dataframe and merge together contiguous events with the same kmer (move 0).
-        Missing kmers are infered from the previous and current kmer sequences.
-        * events: numpy ndarray
-            2D Array containing the events values obtained from a fast5 file
-        """
-        # Filter out 0 move events which doesn't add any info
-        events = events[events["move"]>0]
-        nmoves = len(events)
-        # Create an empty nd array to store elements
-        nkmer = events['move'].sum()
-        kmers = np.empty (shape=(nkmer,), dtype=[('seq','<U5'), ('start', '<u8'), ('end', '<u8'), ('len', '<u8')])
-        kmer_index = 0
-
-        # Iterate over the events ndarray
-        for i in np.arange (nmoves):
-            move = events["move"][i]
-            start = events["start"][i]
-            seq = events["model_state"][i].decode("utf8")
-            if i == nmoves-1:
-                end = events["start"][i] + events["length"][i]
-            else:
-                end = events["start"][i+1]
-
-            if move > 1:
-                # Generate the missing kmers by combining the previous and the current sequences
-                prev_seq =  "#"*5 if i == 0 else events["model_state"][i-1].decode("utf8")
-                for j in range (1, move):
-                    missing_kmer_seq = prev_seq [j:move] + seq [0:(5-move+j)]
-                    kmers [kmer_index] = (missing_kmer_seq, start, start, 0)
-                    kmer_index+=1
-
-            # Add new kmer
-            kmers[kmer_index] = (seq, start, end, end-start)
-            kmer_index+=1
-
-        return kmers
+    @property
+    def kmers_df (self):
+        return pd.DataFrame (self.kmers)
