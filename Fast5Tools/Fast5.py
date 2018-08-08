@@ -39,6 +39,7 @@ class Fast5 (object):
         error_on_missing_raw=True,
         error_on_missing_metadata=True,
         error_on_missing_basecall=False,
+        signal_normalization = 'zscore',
         **kwargs):
         """
         Parse a Fast5 file basecalled by albacore 2.0+ with h5py and extract the datasets raw, events and fastq.
@@ -49,9 +50,12 @@ class Fast5 (object):
             Name of the basecall analyses group in the fast5 file. If None the no basecall values will be fetched
         * raw_read_num: INT (default 0)
             Index of the raw read values in the raw group in the fast5 file. If None the no raw values will be fetched
+        * signal_normalization (default 'zscore')
+            Normalization strategy of the raw signal. Can be None or 'zscore'
         """
         # Self variables
         self.fast5_fn = fast5_fn
+        self.signal_normalization = signal_normalization
         self.analyses = OrderedDict()
         self.metadata = OrderedDict()
 
@@ -65,6 +69,10 @@ class Fast5 (object):
             # Get raw values
             try:
                 self.raw = list(f['/Raw/Reads'].values())[raw_read_num]['Signal'].value
+                if self.signal_normalization == "zscore":
+                    self.raw_mean = self.raw.mean()
+                    self.raw_std = self.raw.std()
+                    self.raw = (self.raw-self.raw_mean)/self.raw_std
                 self.read_id = list(f['/Raw/Reads'].values())[raw_read_num].attrs["read_id"].decode("utf8")
             except (KeyError, IndexError, TypeError) as E:
                 if error_on_missing_raw:
@@ -98,8 +106,10 @@ class Fast5 (object):
     def __repr__(self):
         """ Readable description of the object """
         m="[{}] file:{}\n".format(self.__class__.__name__, self.fast5_fn)
-        m +="\tRead ID: {}\n".format(self.read_id)
-        m +="\tCount Raw signals: {}\n".format(self.n_raw)
+        m +="\tRead ID: {}\tCount Raw signals: {}\n".format(self.read_id, self.n_raw)
+        if self.signal_normalization == "zscore":
+            m +="\tZscore normalization\tRaw mean before norm {}\tRaw std before norm {}\n".format(
+                round(self.raw_mean, 2), round(self.raw_std, 2))
         for analyses_name, analysis in self.analyses.items():
             m += "\t{}\n".format(analyses_name)
             m += str(analysis)
@@ -123,13 +133,13 @@ class Fast5 (object):
     #~~~~~~~~~~~~~~PUBLIC METHODS~~~~~~~~~~~~~~#
     def plot_raw (self, **kwargs):
         stderr_print ("DEPRECATED, use plot() instead")
+        sys.exit()
 
     def plot (self,
         start=None,
         end=None,
         plot_analyses=["Albacore_basecalling", "Nanopolish_eventalign"],
         smoothing_win_size=0,
-        zscore_norm=False,
         figsize = (30, 5),
         plot_style="ggplot",
         raw_linewidth = 0.5,
@@ -145,22 +155,12 @@ class Fast5 (object):
             If True the start and end position of each kmer will be indicated by vertical lines on the graph
         * smoothing_win_size INT
             If larger than 0 will smooth the signal with a moving median window of size X
-        * zscore_norm: BOOL (default False)
-            If True the raw will be normalized using the zscore formula
         """
 
-        all_raw = self.raw
-        if zscore_norm:
-            all_raw = self._zscore_norm (raw=all_raw)
-        if smoothing_win_size:
-            all_raw = self._raw_signal_smoothing (raw=all_raw, win_size=smoothing_win_size)
-
         # Define start and end boundaries + extract data
-        if not start:
-            start = 0
-        if not end:
-            end=self.n_raw
-        raw = all_raw [start:end]
+        start = start if start else 0
+        end = end if end else self.n_raw
+        raw = self.get_raw (start=start, end=end, smoothing_win_size=smoothing_win_size)
         x_scale = range(start, end)
 
         # Plot the raw signal
@@ -169,7 +169,6 @@ class Fast5 (object):
             _ = ax.plot (x_scale, raw, color=raw_color, linewidth=raw_linewidth, zorder=1)
 
             legend = []
-
             #Plot Kmer boundaries if required and available
             if "Albacore_basecalling" in plot_analyses and "Albacore_basecalling" in self.analyses:
                 ymin, ymax = ax.get_ylim()
@@ -177,8 +176,7 @@ class Fast5 (object):
 
                 for row in self.analyses["Albacore_basecalling"].kmers:
                     if row["end"] != row["start"] and row["end"] >= start and row["start"] <= end:
-                        y = np.median (all_raw [row["start"]: row["end"]])
-                        _ = ax.hlines (y=y, xmin=row["start"], xmax=row["end"], linewidth=2, color="red", zorder=2, alpha=0.75)
+                        _ = ax.hlines (y=row["median"], xmin=row["start"], xmax=row["end"], linewidth=2, color="red", zorder=2, alpha=0.75)
                 legend.append (mpatches.Patch(color='red', label='Albacore'))
 
             if "Nanopolish_eventalign" in plot_analyses and "Nanopolish_eventalign" in self.analyses:
@@ -187,21 +185,22 @@ class Fast5 (object):
 
                 for row in self.analyses["Nanopolish_eventalign"].kmers:
                     if row["end"] >= start and row["start"] <= end:
-                        y = np.median (all_raw [row["start"]: row["end"]])
-                        _ = ax.hlines (y=y, xmin=row["start"], xmax=row["end"], linewidth=2, color="blue", zorder=3, alpha=0.75)
+                        _ = ax.hlines (y=row["median"], xmin=row["start"], xmax=row["end"], linewidth=2, color="blue", zorder=3, alpha=0.75)
                 legend.append (mpatches.Patch(color='blue', label='Nanopolish'))
 
             # Define title
             title = "Read ID {} / Raw:{:,}".format (self.read_id, len(raw))
-            if smoothing_win_size: title+= " / Smooth Win Size:{}".format (smoothing_win_size)
-            if zscore_norm: title+= " / Z-score normalised"
+            if smoothing_win_size:
+                title+= " / Smooth Win Size:{}".format (smoothing_win_size)
+            if self.signal_normalization == "zscore":
+                 title+= " / Z-score normalised"
             _ = ax.set_title (title)
             _ = ax.set_xlim(start, end)
             if legend:
                 _ = ax.legend (handles=legend, frameon=False, ncol=len(legend))
         return fig, ax
 
-    def get_raw (self, start=None, end=None, smoothing_win_size=0, zscore_norm=False):
+    def get_raw (self, start=None, end=None, smoothing_win_size=0):
         """
         * start INT
             If defined the data will start at that value
@@ -209,24 +208,15 @@ class Fast5 (object):
             If defined the data will end at that value
         * smoothing_win_size INT
             If larger than 0 will smooth the signal with a moving median window of size X
-        * zscore_norm: BOOL (default False)
-            If True the raw will be normalized using the zscore formula
+
         """
         raw = self.raw
-        if zscore_norm:
-            raw = self._zscore_norm (raw)
         if smoothing_win_size:
             raw = self._raw_signal_smoothing (raw=raw, win_size=smoothing_win_size)
         raw = raw [start:end]
-
         return raw
 
     #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
-
-    def _zscore_norm (self, raw, **kwargs):
-        """ Normalize raw using the zscore formula
-        """
-        return (raw-raw.mean())/raw.std()
 
     def _raw_signal_smoothing (self, raw, win_size=3, **kwargs):
         """ Smooth the raw signal using a moving median window.
@@ -258,9 +248,9 @@ class Fast5 (object):
             ('seq','<U5'),
             ('start', np.uint32),
             ('end', np.uint32),
-            ('mean', np.longdouble),
-            ('median', np.longdouble),
-            ('std', np.longdouble)])
+            ('mean', np.float64),
+            ('median', np.float64),
+            ('std', np.float64)])
 
         # Iterate over the events ndarray
         kmer_index = 0
