@@ -12,13 +12,12 @@ from time import time
 # Third party imports
 import numpy as np
 import pysam
-from tqdm import tqdm
 
 # Local imports
 from Fast5Tools.Helper_fun import stderr_print
 from Fast5Tools.Fast5 import Fast5, Fast5Error
 from Fast5Tools.Basecall import Basecall
-from Fast5Tools.Alignment import Alignment, Read
+from Fast5Tools.Alignment import Alignment, Hit
 from Fast5Tools.Eventalign import Eventalign
 
 
@@ -49,7 +48,9 @@ class Fast5Wrapper ():
         """
         Parse a bam/sam file
         """
-        read_id_c = Counter ()
+        not_in_db_read_id = set()
+        valid_read_id = set()
+        valid_hits = invalid_hits = 0
         summary_c = Counter()
         t = time ()
 
@@ -61,33 +62,26 @@ class Fast5Wrapper ():
 
                 # Counter update
                 if self.verbose and time()-t >= 0.2:
-                    stderr_print("\tValid hits:{:,}\tInvalid hits:{:,}\tSecondary hits:{:,}\tUnmapped reads:{:,}\r".format (
-                        summary_c["valid"], summary_c["invalid"], summary_c["secondary"], summary_c["unmapped"]))
+                    stderr_print("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\r".format (
+                        len(valid_read_id), valid_hits, len(not_in_db_read_id), invalid_hits))
                     t = time()
 
                 qname = r.query_name
+
                 if qname not in db:
-                    summary_c["not_in_db"] +=1 ################################# COUNT EVERY LINE NOT IN DB not just READS
-                    continue
+                    not_in_db_read_id.add(qname)
 
-                if r.is_unmapped:
-                    summary_c["unmapped"] +=1
-                    continue
+                elif r.is_unmapped or (not include_secondary and (r.is_secondary or r.is_supplementary)):
+                    invalid_hits +=1
 
-                if r.is_secondary or r.is_supplementary:
-                    summary_c["secondary"] +=1
-                    if not include_secondary:
-                        continue
+                else:
+                    # Create new analyses entry in Fast5 if never saw before (overwrite existing)
+                    if not qname in valid_read_id:
+                        db[qname].analyses[analysis_name] = Alignment ()
 
-                # Create new analyses entry in Fast5 if never saw before (overwrite existing)
-                if not qname in read_id_c:
-                    db[qname].analyses[analysis_name] = Alignment ()
-                read_id_c [qname] +=1
-
-                # Add read to alignment analysis
-                try:
+                    # Add read to alignment analysis
                     db[qname].analyses[analysis_name].add_read (
-                        Read (
+                        Hit (
                             qname = qname,
                             qstart = int (r.query_alignment_start),
                             qend = int (r.query_alignment_end),
@@ -100,17 +94,16 @@ class Fast5Wrapper ():
                             align_len = int (r.query_alignment_length),
                             mapq = int (r.mapping_quality),
                             align_score = int (r.get_tag("AS"))))
-                    if self.verbose: summary_c["valid"] +=1
-
-                except TypeError as E:
-                    if self.verbose: summary_c["invalid"] +=1
+                    valid_read_id.add(qname)
+                    valid_hits +=1
 
         if self.verbose:
-            stderr_print("\tValid hits:{:,}\tInvalid hits:{:,}\tSecondary hits:{:,}\tUnmapped reads:{:,}\tReads not in db:{:,}\n".format (
-                summary_c["valid"], summary_c["invalid"], summary_c["secondary"], summary_c["unmapped"], summary_c["not_in_db"]))
-            stderr_print ("\tUnique Fast5 with alignments {}\n".format(len(read_id_c)))
+            stderr_print("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\n".format (
+                len(valid_read_id), valid_hits, len(not_in_db_read_id), invalid_hits))
 
-    def add_nanopolish_eventalign (self, eventalign_fn, analysis_name="Nanopolish_eventalign"):
+    def add_nanopolish_eventalign (self,
+        eventalign_fn,
+        analysis_name="Nanopolish_eventalign"):
         """
         Parse a nanopolish event align file
         """
@@ -119,12 +112,13 @@ class Fast5Wrapper ():
             ('start', np.uint32),
             ('end', np.uint32),
             ('ref_pos', np.uint32),
-            ('mean', np.longdouble),
-            ('median', np.longdouble),
-            ('std', np.longdouble)]
+            ('mean', np.float64),
+            ('median', np.float64),
+            ('std', np.float64)]
 
-        read_id_c = Counter ()
-        summary_c = Counter()
+        not_in_db_read_id = set()
+        valid_read_id = set()
+        valid_kmers = empty_kmers = 0
         t = time ()
 
         if self.verbose:
@@ -132,30 +126,36 @@ class Fast5Wrapper ():
 
         with shelve.open (self.db_file, flag="w", writeback=True) as db, open (eventalign_fn, "r") as fp:
 
-            # Flush header line
+            # Check header fields
             header = next(fp)
+            hs = header.rstrip().split("\t")
+            if not "read_name" in hs:
+                raise ValueError ("Nanopolish eventalign has to be ran with '--print-read-names' option")
+            if not "start_idx" in hs or not "end_idx" in hs:
+                raise ValueError ("Nanopolish eventalign has to be ran with '--signal-index' option")
+            if len(hs) != 15:
+                raise ValueError ("Missing fields in the nanopolish eventalign")
 
             first = True
             for line in fp:
 
                 # Counter update
                 if self.verbose and time()-t >= 0.2:
-                    stderr_print ("\tValid reads:{:,}\tReads not in db:{:,}\r".format (
-                        summary_c["reads"], summary_c["not_in_db"]))
+                    stderr_print("\tValid reads:{:,}\tValid kmers:{:,}\tEmpty_kmers:{:,}\tReads not in database:{:,}\r".format (
+                        len(valid_read_id), valid_kmers, empty_kmers, len(not_in_db_read_id)))
                     t = time()
 
                 # Extract important fields from the file
                 ls = line.rstrip().split("\t")
-                if len(ls) != 15:
-                    summary_c["invalid_lines"] += 1
                 cur_qname, cur_seq, cur_start, cur_end, cur_ref_pos, cur_rname = ls[3] ,ls[2] ,int(ls[13]) ,int(ls[14]) ,int(ls[1]) ,ls[0]
 
                 if cur_qname not in db:
-                    summary_c["not_in_db"] +=1
+                    not_in_db_read_id.add(cur_qname)
 
                 # First line exception
                 elif first:
                     first = False
+                    # Start a new kmer list
                     qname, seq, start, end, ref_pos, rname = cur_qname, cur_seq, cur_start, cur_end, cur_ref_pos, cur_rname
                     raw = db[qname].get_raw()
                     kmer_list = []
@@ -163,36 +163,58 @@ class Fast5Wrapper ():
                 # Fill in the list for the curent read name
                 elif cur_qname == qname:
                     if cur_ref_pos == ref_pos:
+                        # Update start position (Nanopolish coord are reverse compared with raw signal)
                         start = cur_start
 
                     else:
+                        # Add new kmer
                         rs = raw [start:end]
-                        kmer_list.insert (0, (seq, start, end, ref_pos, np.mean(rs), np.median(rs), np.std(rs)))
+                        if rs.size ==0 :
+                            kmer_list.insert (0, (seq, start, end, ref_pos, np.nan, np.nan, np.nan))
+                            empty_kmers +=1
+                        else:
+                            kmer_list.insert (0, (seq, start, end, ref_pos, np.mean(rs), np.median(rs), np.std(rs)))
+                            valid_kmers +=1
+                        # Start new kmer
                         seq, start, end, ref_pos = cur_seq, cur_start, cur_end, cur_ref_pos
+                        # Update counters
+                        valid_kmers +=1
 
                 else:
+                    # Add new kmer and add read_name analysis entry
                     rs = raw [start:end]
-                    kmer_list.insert (0, (seq, start, end, ref_pos, np.mean(rs), np.median(rs), np.std(rs)))
+                    if rs.size ==0 :
+                        kmer_list.insert (0, (seq, start, end, ref_pos, np.nan, np.nan, np.nan))
+                        empty_kmers +=1
+                    else:
+                        kmer_list.insert (0, (seq, start, end, ref_pos, np.mean(rs), np.median(rs), np.std(rs)))
+                        valid_kmers +=1
                     db[qname].analyses[analysis_name] = Eventalign (ref_name = rname, kmers = np.array (kmer_list, dtype=array_dtypes))
-                    qname, seq, start, end, ref_pos, rname = cur_qname, cur_seq, cur_start, cur_end, cur_ref_pos, cur_rname
-
                     # Start a new kmer list
+                    qname, seq, start, end, ref_pos, rname = cur_qname, cur_seq, cur_start, cur_end, cur_ref_pos, cur_rname
                     raw = db[qname].get_raw()
                     kmer_list = []
-                    summary_c["reads"] += 1
+                    # Update counters
+                    valid_read_id.add(qname)
+                    valid_kmers +=1
 
             # Last line exception
             if kmer_list:
+                # Add new kmer and add read_name analysis entry
                 rs = raw [start:end]
-                kmer_list.insert (0, (seq, start, end, ref_pos, np.mean(rs), np.median(rs), np.std(rs)))
+                if rs.size ==0 :
+                    kmer_list.insert (0, (seq, start, end, ref_pos, np.nan, np.nan, np.nan))
+                    empty_kmers +=1
+                else:
+                    kmer_list.insert (0, (seq, start, end, ref_pos, np.mean(rs), np.median(rs), np.std(rs)))
+                    valid_kmers +=1
                 db[qname].analyses[analysis_name] = Eventalign (ref_name = rname, kmers = np.array (kmer_list, dtype=array_dtypes))
-                summary_c["kmers"] += 1
-                summary_c["reads"] += 1
+                # Update counters
+                valid_read_id.add(qname)
 
         if self.verbose:
-            stderr_print ("\tValid reads:{:,}\tReads not in db:{:,}\r".format (
-                summary_c["reads"], summary_c["not_in_db"]))
-
+            stderr_print("\tValid reads:{:,}\tValid kmers:{:,}\tEmpty_kmers:{:,}\tReads not in database:{:,}\n".format (
+                len(valid_read_id), valid_kmers, empty_kmers, len(not_in_db_read_id)))
 
     #~~~~~~~~~~~~~~PROPERTY HELPER AND MAGIC METHODS~~~~~~~~~~~~~~#
     def head (self, n=5):
@@ -224,3 +246,5 @@ class Fast5Wrapper ():
                 return db[items]
             else:
                 return None
+
+    #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
