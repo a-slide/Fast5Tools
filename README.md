@@ -1,4 +1,4 @@
-# Fast5Tools 0.0.a1 package documentation
+# Fast5Tools 0.3.1 package documentation
 
 ---
 
@@ -18,13 +18,17 @@
 
 Ideally, before installation, create a clean python3 virtual environment to deploy the package, using virtualenvwrapper for example (see http://www.simononsoftware.com/virtualenv-tutorial-part-2/).
 
-## Required packages:
+## Required python packages:
 
-* h5py>=2.7.1
+All dependencies are automatically installed if using pip
 
-* numpy>=1.8.1
+* h5py>=2.7.0
+* numpy==1.14.0
+* matplotlib>=2.0.0
+* pysam>=0.12.0
+* pandas>=0.23.0
 
-## Installation with pip from github
+## Installation with pip
 
 Ideally, before installation, create a clean python3 virtual environment to deploy the package, using virtualenvwrapper for example (see http://www.simononsoftware.com/virtualenv-tutorial-part-2/).
 
@@ -38,4 +42,6 @@ Ideally, before installation, create a clean python3 virtual environment to depl
 
 ## Usage and tests
 
-Under development ...
+TO DO
+
+Fast5Tools --help
