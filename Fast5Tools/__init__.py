@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Define self package variable
-__version__ = "0.3"
+__version__ = "0.3.1"
 __all__ = ["Fast5Parse", "Fast5Wrapper", "Fast5", "Basecall", "Alignment", "Eventalign"]
 
 description = 'Fast5 tools is a collection of tools to manipulate Fast5 files'
@@ -28,7 +28,7 @@ setup_dict = {
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',],
-    "install_requires": ['h5py>=2.7.1', 'numpy>=1.8.1', 'matplotlib>=2.0.0', 'pysam>=0.13.0', 'pandas>=0.23.3'],
+    "install_requires": ['h5py>=2.7.0', 'numpy==1.14.0', 'matplotlib>=2.0.0', 'pysam>=0.12.0', 'pandas>=0.23.0'],
     "packages": [__name__],
     "entry_points":{'console_scripts': [
         'Fast5Tools= Fast5Tools.Fast5Tools_Main:main']}}
