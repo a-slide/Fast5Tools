@@ -22,6 +22,7 @@ def Fast5Parse (
     basecall_group='Basecall_1D_000',
     raw_read_num=0,
     error_on_missing_basecall=True,
+    signal_normalization="zscore",
     threads = 4,
     verbose = False,
     **kwargs):
@@ -36,6 +37,8 @@ def Fast5Parse (
         Name of the analysis group in the fast5 file containing the basecalling information
     * raw_read_num: INT (default 0)
         Index of the read in the Raw group
+    * signal_normalization (default 'zscore')
+        Normalization strategy of the raw signal. Can be None or 'zscore'
     * threads: INT (default 2)
         Total number of threads. Minimum = 2
     """
@@ -62,7 +65,7 @@ def Fast5Parse (
     for i in range (threads):
         fp_ps_list.append (mp.Process (
             target=_fast5_parse_worker,
-            args=(fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall)))
+            args=(fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall, signal_normalization)))
 
     # write_db_worker process
     wd_ps = mp.Process (
@@ -99,7 +102,7 @@ def _fast5_list_worker (fast5_fn_q, fast5_dir, threads):
     for i in range (threads):
         fast5_fn_q.put(None)
 
-def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall):
+def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall, signal_normalization):
     """
     Multi-threaded workers in charge of parsing fast5 file. From valid fast5 files, block matching barcode
     geometries are extracted and add to an output shared memory list. In the same time, metadata are
@@ -113,7 +116,8 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, 
                 fast5_fn = fast5_fn,
                 basecall_group = basecall_group,
                 raw_read_num = raw_read_num,
-                error_on_missing_basecall = error_on_missing_basecall)
+                error_on_missing_basecall = error_on_missing_basecall,
+                signal_normalization = signal_normalization)
             fast5_obj_q.put (f)
 
         # If an error happened just put it in the out queue
@@ -153,6 +157,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
 
     if verbose:
         stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))
-        stderr_print ("\tInvalid fast5 files summary\n")
-        for i, j in err_counter.items():
-             stderr_print ("\t\t{}:{:,}\n".format(i,j))
+        if err_counter:
+            stderr_print ("\tInvalid fast5 files summary\n")
+            for i, j in err_counter.items():
+                 stderr_print ("\t\t{}:{:,}\n".format(i,j))
