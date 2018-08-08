@@ -47,7 +47,7 @@ class Alignment (object):
             m +="\t\t{}\n".format(r)
         return (m)
 
-class Read ():
+class Hit ():
     """
     Convert pysam aligned segment Obj in pure python Obj, as pysam obj cannot be pickled
     """
