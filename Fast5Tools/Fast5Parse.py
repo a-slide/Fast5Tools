@@ -52,8 +52,8 @@ def Fast5Parse (
 
     # Init Multiprocessing variables
     manager = mp.Manager()
-    fast5_fn_q = manager.Queue() # Queue for fast5 file names
-    fast5_obj_q = manager.Queue() # Queue for blocks found
+    fast5_fn_q = manager.Queue(maxsize=1000) # Queue for fast5 file names
+    fast5_obj_q = manager.Queue(maxsize=1000) # Queue for blocks found
 
     # list_worker process
     fl_ps = mp.Process (
