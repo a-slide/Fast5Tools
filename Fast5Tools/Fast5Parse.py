@@ -7,6 +7,7 @@ import multiprocessing as mp
 from time import time
 from collections import Counter
 import shelve
+import pickle
 
 # Third party imports
 
@@ -135,6 +136,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
     err_counter = Counter ()
     n_invalid = n_valid = 0
     t = time()
+    read_id_list = []
 
     # Create shelves database to store the blocks
     with shelve.open (db_file, flag = "n") as db:
@@ -150,10 +152,16 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
                 elif isinstance (item, Fast5):
                     n_valid += 1
                     db[item.read_id] = item
+                    read_id_list.append (item.read_id)
 
                 if time()-t >= 0.2:
                     if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
                     t = time()
+
+    if verbose:
+        stderr_print("Write database index\n")
+    with open(db_file+".dbi", "wb") as fh:
+        pickle.dump(read_id_list, fh)
 
     if verbose:
         stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))

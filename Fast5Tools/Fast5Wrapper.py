@@ -8,13 +8,15 @@ import shelve
 from itertools import islice
 import random
 from time import time
+import pickle
+import sys
 
 # Third party imports
 import numpy as np
 import pysam
 
 # Local imports
-from Fast5Tools.Helper_fun import stderr_print
+from Fast5Tools.Helper_fun import stderr_print, access_file
 from Fast5Tools.Fast5 import Fast5, Fast5Error
 from Fast5Tools.Basecall import Basecall
 from Fast5Tools.Alignment import Alignment, Hit
@@ -33,6 +35,27 @@ class Fast5Wrapper ():
 
         self.verbose = verbose
         self.db_file = db_file
+        self.db_index = db_file+".dbi"
+
+        # Check if db is readable
+        if not access_file (self.db_file):
+            stderr_print ("Can not access or read the database file")
+            sys.exit()
+
+        # If index not accessible or not readeable
+        if not access_file (self.db_index):
+            stderr_print ("Can not access or read the database index. Indexing database")
+            # List all read_id keys in db
+            with shelve.open (self.db_file, flag = "r") as db:
+                self.read_id_list = list(db.keys())
+            # Write in a pickled file for next time
+            with open (self.db_index, "wb") as fh:
+                pickle.dump (self.read_id_list, fh)
+
+        # If index is readeable. Unpickle the read_id list
+        else:
+            with open (self.db_index, "rb") as fh:
+                self.read_id_list = pickle.load(fh)
 
     def __repr__(self):
         """ Readable description of the object """
@@ -62,7 +85,7 @@ class Fast5Wrapper ():
 
                 # Counter update
                 if self.verbose and time()-t >= 0.2:
-                    stderr_print("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\r".format (
+                    c("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\r".format (
                         len(valid_read_id), valid_hits, len(not_in_db_read_id), invalid_hits))
                     t = time()
 
@@ -220,29 +243,31 @@ class Fast5Wrapper ():
     def head (self, n=5):
         l =[]
         with shelve.open (self.db_file, flag = "r") as db:
-            for f in islice( db.values (), n):
+            for read_id in self.read_id_list [:n]:
+                f = db[read_id]
                 l.append (f)
         return l
 
     def sample (self, n=10):
+        l =[]
         with shelve.open (self.db_file, flag = "r") as db:
-            l = []
-            for k in random.sample (list(db.keys()), n):
-                l.append (db[k])
+            for read_id in random.sample (self.read_id_list, n):
+                f = db[read_id]
+                l.append (f)
         return l
 
     def __len__ (self):
-        with shelve.open (self.db_file, flag = "r") as db:
-            return (len(db))
+        return (len(self.read_id_list))
 
     def __iter__ (self):
         with shelve.open (self.db_file, flag = "r") as db:
-            for f in db.values ():
+            for read_id in self.read_id_list:
+                f = db[read_id]
                 yield (f)
 
     def __getitem__(self, items):
         with shelve.open (self.db_file, flag = "r") as db:
-            if items in db:
+            if items in self.read_id_list:
                 return db[items]
             else:
                 return None

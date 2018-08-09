@@ -32,8 +32,12 @@ def recursive_file_gen (dir, ext, **kwargs):
                 for fn in recursive_file_gen (os.path.join(dir, item), ext):
                     yield fn
 
-
-def access_dir (dir, **kwargs):
+def access_dir (fn, **kwargs):
     """Check if the directory is readeable
     """
-    return os.path.isdir (dir) and os.access (dir, os.R_OK),
+    return os.path.isdir (fn) and os.access (fn, os.R_OK),
+
+def access_file (fn, **kwargs):
+    """Check if the directory is readeable
+    """
+    return os.path.isfile (fn) and os.access (fn, os.R_OK),
