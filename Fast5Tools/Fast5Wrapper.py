@@ -82,7 +82,7 @@ class Fast5Wrapper ():
         if self.verbose:
             stderr_print ("Parse alignment file {}\n".format(alignment_fn))
 
-        with shelve.open (self.db_file, flag="w", writeback=True) as db, pysam.AlignmentFile(alignment_fn) as fp:
+        with shelve.open (self.db_file, flag="w") as db, pysam.AlignmentFile(alignment_fn) as fp:
             for r in fp:
 
                 # Counter update
@@ -149,7 +149,7 @@ class Fast5Wrapper ():
         if self.verbose:
             stderr_print ("Parse Nanopolish eventalign file {}\n".format(eventalign_fn))
 
-        with shelve.open (self.db_file, flag="w", writeback=True) as db, open (eventalign_fn, "r") as fp:
+        with shelve.open (self.db_file, flag="w") as db, open (eventalign_fn, "r") as fp:
 
             # Check header fields
             header = next(fp)
