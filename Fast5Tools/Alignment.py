@@ -13,64 +13,24 @@ class Alignment (object):
     """
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
-    def __init__(self):
-        """"""
-        self.read_list = []
-        self.nread = 0
-
-    def add_read (self, read, **kwargs):
-        """"""
-        self.read_list.append (read)
-        self.nread += 1
-
-    def best_read (self, based_on = "align_score"):
-        """"""
-        if self.nread == 0:
-            return None
-
-        if self.nread == 1:
-            return self.read_list [0]
-
-        if based_on == "align_score":
-            return sorted(self.read_list, key=lambda x: x.align_score, reverse=True)[0]
-
-        elif based_on == "mapq":
-            return sorted(self.read_list, key=lambda x: x.mapq, reverse=True)[0]
-
-        elif based_on == "align_len":
-            return sorted(self.read_list, key=lambda x: x.align_len, reverse=True)[0]
+    def __init__(self, r, **kwargs):
+        """Extract fields from pysam AlignedSegment object they are not pickeable"""
+        self.qname = r.query_name,
+        self.qstart = int (r.query_alignment_start),
+        self.qend = int (r.query_alignment_end),
+        self.qlen = int (r.query_length),
+        self.rname = r.reference_name,
+        self.rstart = int (r.reference_start),
+        self.rend = int (r.reference_end),
+        self.rlen = int (r.reference_length),
+        self.strand = "-" if r.is_reverse else "+",
+        self.align_len = int (r.query_alignment_length),
+        self.mapq = int (r.mapping_quality),
+        self.align_score = int (r.get_tag("AS"))
 
     def __repr__(self):
         """ Readable description of the object """
-        m = ""
-        for r in self.read_list:
-            m +="\t\t{}\n".format(r)
-        return (m)
-
-class Hit ():
-    """
-    Convert pysam aligned segment Obj in pure python Obj, as pysam obj cannot be pickled
-    """
-    #~~~~~~~~~~~~~~FUNDAMENTAL METHODS~~~~~~~~~~~~~~#
-
-    def __init__(self, qname, qlen, qstart, qend, rname, rlen, rstart, rend, strand, align_len, mapq, align_score=None, **kwargs):
-        """
-        """
-        self.qname = qname
-        self.qlen = qlen
-        self.qstart = qstart
-        self.qend = qend
-        self.rname = rname
-        self.rlen = rlen
-        self.rstart = rstart
-        self.rend = rend
-        self.strand = strand
-        self.align_len = align_len
-        self.mapq = mapq
-        self.align_score = align_score
-
-    def __repr__(self):
-        return "Query:{}-{}:{} ({} pb) / Reference:{}-{}:{}({}) ({} pb) / Alignment len:{} / Mapq:{} / Align Score:{}".format(
+        return "\t\tQuery:{}-{}:{} ({} pb) / Reference:{}-{}:{}({}) ({} pb) / Alignment len:{} / Mapq:{} / Align Score:{}\n".format(
             self.qname, self.qstart, self.qend, self.qlen,
             self.rname, self.rstart, self.rend, self.strand, self.rlen,
             self.align_len, self.mapq, self.align_score)

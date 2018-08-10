@@ -19,7 +19,7 @@ import pysam
 from Fast5Tools.Helper_fun import stderr_print, access_file
 from Fast5Tools.Fast5 import Fast5, Fast5Error
 from Fast5Tools.Basecall import Basecall
-from Fast5Tools.Alignment import Alignment, Hit
+from Fast5Tools.Alignment import Alignment
 from Fast5Tools.Eventalign import Eventalign
 
 
@@ -33,7 +33,6 @@ class Fast5Wrapper ():
         verbose = False,
         **kwargs):
 
-        self.verbose = verbose
         self.db_file = db_file
         self.db_index = db_file+".dbi"
 
@@ -44,7 +43,7 @@ class Fast5Wrapper ():
 
         # If index not accessible or not readeable
         if not access_file (self.db_index):
-            if self.verbose:
+            if verbose:
                 stderr_print ("Can not access or read the database index. Indexing database")
             # List all read_id keys in db
             with shelve.open (self.db_file, flag = "r") as db:
@@ -55,7 +54,7 @@ class Fast5Wrapper ():
 
         # If index is readeable. Unpickle the read_id list
         else:
-            if self.verbose:
+            if verbose:
                 stderr_print ("Load database index")
             with open (self.db_index, "rb") as fh:
                 self.read_id_list = pickle.load(fh)
@@ -70,65 +69,53 @@ class Fast5Wrapper ():
     def add_bam_alignment (self,
         alignment_fn,
         analysis_name = "Alignment",
-        include_secondary = False):
+        max_sync_buffer = 100,
+        verbose=False):
         """
         Parse a bam/sam file
         """
         not_in_db_read_id = set()
         valid_read_id = set()
-        valid_hits = invalid_hits = 0
+        unmapped_read = secondary_hit = 0
         t = time ()
+        sync_buffer = 0
 
-        if self.verbose:
+        if verbose:
             stderr_print ("Parse alignment file {}\n".format(alignment_fn))
 
-        with shelve.open (self.db_file, flag="w") as db, pysam.AlignmentFile(alignment_fn) as fp:
+        with shelve.open (self.db_file, flag="w", writeback=True) as db, pysam.AlignmentFile(alignment_fn) as fp:
             for r in fp:
 
                 # Counter update
-                if self.verbose and time()-t >= 0.2:
-                    stderr_print("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\r".format (
-                        len(valid_read_id), valid_hits, len(not_in_db_read_id), invalid_hits))
+                if verbose and time()-t >= 0.2:
+                    stderr_print("\tValid reads:{:,}\tReads not in database:{:,}\tReads unmapped:{:,}\tSecondary hits:{:,}\r".format (
+                        len(valid_read_id), len(not_in_db_read_id), unmapped_read, secondary_hit))
                     t = time()
 
                 qname = r.query_name
 
-                if qname not in db:
+                if r.is_secondary or r.is_supplementary:
+                    secondary_hit +=1
+                elif r.is_unmapped:
+                    unmapped_read +=1
+                elif qname not in self.read_id_list:
                     not_in_db_read_id.add(qname)
-
-                elif r.is_unmapped or (not include_secondary and (r.is_secondary or r.is_supplementary)):
-                    invalid_hits +=1
-
                 else:
-                    # Create new analyses entry in Fast5 if never saw before (overwrite existing)
-                    #if not qname in valid_read_id:
-                    db[qname].analyses[analysis_name] = Alignment ()
-
-                    # Add read to alignment analysis
-                    db[qname].analyses[analysis_name].add_read (
-                        Hit (
-                            qname = qname,
-                            qstart = int (r.query_alignment_start),
-                            qend = int (r.query_alignment_end),
-                            qlen = int (r.query_length),
-                            rname = r.reference_name,
-                            rstart = int (r.reference_start),
-                            rend = int (r.reference_end),
-                            rlen = int (r.reference_length),
-                            strand = "-" if r.is_reverse else "+",
-                            align_len = int (r.query_alignment_length),
-                            mapq = int (r.mapping_quality),
-                            align_score = int (r.get_tag("AS"))))
+                    db[qname].analyses[analysis_name] = Alignment(r)
                     valid_read_id.add(qname)
-                    valid_hits +=1
 
-        if self.verbose:
-            stderr_print("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\n".format (
-                len(valid_read_id), valid_hits, len(not_in_db_read_id), invalid_hits))
+                    sync_buffer += 1
+                    if sync_buffer == max_sync_buffer:
+                        db.sync()
+
+            db.sync()
+            stderr_print("\tValid reads:{:,}\tReads not in database:{:,}\tReads unmapped:{:,}\tSecondary hits:{:,}\n".format (
+                    len(valid_read_id), len(not_in_db_read_id), unmapped_read, secondary_hit))
 
     def add_nanopolish_eventalign (self,
         eventalign_fn,
-        analysis_name="Nanopolish_eventalign"):
+        analysis_name="Nanopolish_eventalign",
+        verbose=False):
         """
         Parse a nanopolish event align file
         """
@@ -146,7 +133,7 @@ class Fast5Wrapper ():
         valid_kmers = empty_kmers = 0
         t = time ()
 
-        if self.verbose:
+        if verbose:
             stderr_print ("Parse Nanopolish eventalign file {}\n".format(eventalign_fn))
 
         with shelve.open (self.db_file, flag="w") as db, open (eventalign_fn, "r") as fp:
@@ -165,7 +152,7 @@ class Fast5Wrapper ():
             for line in fp:
 
                 # Counter update
-                if self.verbose and time()-t >= 0.2:
+                if verbose and time()-t >= 0.2:
                     stderr_print("\tValid reads:{:,}\tValid kmers:{:,}\tEmpty_kmers:{:,}\tReads not in database:{:,}\r".format (
                         len(valid_read_id), valid_kmers, empty_kmers, len(not_in_db_read_id)))
                     t = time()
@@ -237,9 +224,8 @@ class Fast5Wrapper ():
                 # Update counters
                 valid_read_id.add(qname)
 
-        if self.verbose:
-            stderr_print("\tValid reads:{:,}\tValid kmers:{:,}\tEmpty_kmers:{:,}\tReads not in database:{:,}\n".format (
-                len(valid_read_id), valid_kmers, empty_kmers, len(not_in_db_read_id)))
+        stderr_print("\tValid reads:{:,}\tValid kmers:{:,}\tEmpty_kmers:{:,}\tReads not in database:{:,}\n".format (
+            len(valid_read_id), valid_kmers, empty_kmers, len(not_in_db_read_id)))
 
     #~~~~~~~~~~~~~~PROPERTY HELPER AND MAGIC METHODS~~~~~~~~~~~~~~#
     def head (self, n=5):

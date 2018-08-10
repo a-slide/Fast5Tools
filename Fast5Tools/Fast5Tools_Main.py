@@ -71,14 +71,13 @@ def fast5_parse ():
 def add_bam_alignment ():
     # Define parser object
     parser = argparse.ArgumentParser(description="Add Bam alignmnent to am existing fast5 shelve database.\
-    Hits are saved in an Alignment object associated with the Fast5 read object")
+    Hits are saved in an Alignment object associated with the Fast5 read object. Secondary, supplementary and unmapped reads are not saved")
     parser.prog = "Fast5Tools add_bam_alignment"
     # Define arguments
     parser.add_argument("subprogram")
     parser.add_argument("-d", "--db_file", required=True, help="Path to the output database file")
     parser.add_argument("-a", "--alignment_fn", required=True, help="Path to a BAM or SAM file containing all aligned reads (does not need to be sorted, filtered or indexed)")
     parser.add_argument("--analysis_name", help="Name of the analysis in the fast5 file database. Overwrite previous analysis if a same name is already in the db (default = 'Alignment')")
-    parser.add_argument("--include_secondary", default=False, action='store_true',help="If given secondary alignments are also saved in the database with the corresponding fast5 read (default = False)")
     parser.add_argument("--verbose", default=False, action='store_true', help="If given will be more chatty (default = False)")
     # Parse Argumentss
     a = parser.parse_args()
@@ -91,7 +90,7 @@ def add_bam_alignment ():
     f.add_bam_alignment (
             alignment_fn = a.alignment_fn,
             analysis_name = a.analysis_name,
-            include_secondary = a.include_secondary)
+            verbose=a.verbose)
 
 def add_nanopolish_eventalign ():
     # Define parser object
@@ -115,4 +114,5 @@ def add_nanopolish_eventalign ():
 
     f.add_nanopolish_eventalign (
             eventalign_fn=a.eventalign_fn,
-            analysis_name=a.analysis_name)
+            analysis_name=a.analysis_name,
+            verbose=a.verbose)

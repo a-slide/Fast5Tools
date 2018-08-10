@@ -106,10 +106,11 @@ class Fast5 (object):
     def __repr__(self):
         """ Readable description of the object """
         m="[{}] file:{}\n".format(self.__class__.__name__, self.fast5_fn)
+        if not self.signal_normalization:
         m +="\tRead ID: {}\tCount Raw signals: {}\n".format(self.read_id, self.n_raw)
-        if self.signal_normalization == "zscore":
-            m +="\tZscore normalization\tRaw mean before norm {}\tRaw std before norm {}\n".format(
-                round(self.raw_mean, 2), round(self.raw_std, 2))
+        elif self.signal_normalization == "zscore":
+            m +="\tZscore normalised\n"
+
         for analyses_name, analysis in self.analyses.items():
             m += "\t{}\n".format(analyses_name)
             m += str(analysis)
