@@ -74,7 +74,6 @@ class Fast5Wrapper ():
         not_in_db_read_id = set()
         valid_read_id = set()
         valid_hits = invalid_hits = 0
-        summary_c = Counter()
         t = time ()
 
         if self.verbose:
@@ -85,7 +84,7 @@ class Fast5Wrapper ():
 
                 # Counter update
                 if self.verbose and time()-t >= 0.2:
-                    c("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\r".format (
+                    stderr_print("\tValid reads:{:,}\tValid hits:{:,}\tReads not in database:{:,}\tSkiped unmapped and secondary:{:,}\r".format (
                         len(valid_read_id), valid_hits, len(not_in_db_read_id), invalid_hits))
                     t = time()
 
