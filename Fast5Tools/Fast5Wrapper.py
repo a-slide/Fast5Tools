@@ -101,8 +101,8 @@ class Fast5Wrapper ():
 
                 else:
                     # Create new analyses entry in Fast5 if never saw before (overwrite existing)
-                    if not qname in valid_read_id:
-                        db[qname].analyses[analysis_name] = Alignment ()
+                    #if not qname in valid_read_id:
+                    db[qname].analyses[analysis_name] = Alignment ()
 
                     # Add read to alignment analysis
                     db[qname].analyses[analysis_name].add_read (
