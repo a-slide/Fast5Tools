@@ -159,13 +159,14 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
                     t = time()
 
     if verbose:
+        stderr_print(" "*100+"\r")
         stderr_print("Write database index\n")
     with open(db_file+".dbi", "wb") as fh:
         pickle.dump(read_id_list, fh)
 
-    if verbose:
-        stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))
-        if err_counter:
-            stderr_print ("\tInvalid fast5 files summary\n")
-            for i, j in err_counter.items():
-                 stderr_print ("\t\t{}:{:,}\n".format(i,j))
+
+    stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))
+    if err_counter:
+        stderr_print ("\tInvalid fast5 files summary\n")
+        for i, j in err_counter.items():
+             stderr_print ("\t\t{}:{:,}\n".format(i,j))

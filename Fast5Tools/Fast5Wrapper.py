@@ -38,13 +38,13 @@ class Fast5Wrapper ():
 
         # Check if db is readable
         if not access_file (self.db_file):
-            stderr_print ("Can not access or read the database file")
+            stderr_print ("Can not access or read the database file\n")
             sys.exit()
 
         # If index not accessible or not readeable
         if not access_file (self.db_index):
             if verbose:
-                stderr_print ("Can not access or read the database index. Indexing database")
+                stderr_print ("Can not access or read the database index. Indexing database\n")
             # List all read_id keys in db
             with shelve.open (self.db_file, flag = "r") as db:
                 self.read_id_list = list(db.keys())
@@ -55,9 +55,11 @@ class Fast5Wrapper ():
         # If index is readeable. Unpickle the read_id list
         else:
             if verbose:
-                stderr_print ("Load database index")
+                stderr_print ("Load database index\n")
             with open (self.db_index, "rb") as fh:
                 self.read_id_list = pickle.load(fh)
+            if verbose:
+                stderr_print ("\tRead in database:{:,}\n".format(len(self)))
 
     def __repr__(self):
         """ Readable description of the object """

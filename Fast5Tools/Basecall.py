@@ -28,7 +28,7 @@ class Basecall (object):
             seq = "{}...{}".format(self.fastq_seq[:10], self.fastq_seq[-10:])
         else:
             seq = self.fastq_seq
-        m +="\t\tSeq: {} / Length: {} / Empty kmers: {} / Mean quality: {}\n".format(
+        m +="Seq: {} / Length: {} / Empty kmers: {} / Mean quality: {}".format(
             seq, self.seq_len, self.n_empty_kmers, round(self.mean_qual, 2))
         return m
 
