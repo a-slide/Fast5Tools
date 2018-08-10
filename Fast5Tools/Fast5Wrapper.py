@@ -109,6 +109,7 @@ class Fast5Wrapper ():
                     sync_buffer += 1
                     if sync_buffer == max_sync_buffer:
                         db.sync()
+                        sync_buffer = 0
 
             db.sync()
             stderr_print("\tValid reads:{:,}\tReads not in database:{:,}\tReads unmapped:{:,}\tSecondary hits:{:,}\n".format (
