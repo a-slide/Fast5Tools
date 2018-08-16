@@ -72,7 +72,7 @@ class Raw (object):
         return signal
 
     def _to_hdf5 (self, grp):
-        """Write object into an open h5 group"""
+        """Write object into an open hdf5 group"""
         # Save Metadata
         write_attrs (grp, self.metadata)
         # Save Signal
