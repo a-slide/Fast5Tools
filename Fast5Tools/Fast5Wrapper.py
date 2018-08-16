@@ -52,9 +52,12 @@ class Fast5Wrapper ():
     def __len__(self):
         return len(self.read_id_list)
 
-    # def get_fast5 (self, read_id, proxy=False):
-    #     wit
-
+    def get_fast5 (self, read_id):
+        with h5py.File(self.db_file, "r") as db:
+            f_group = db["fast5"][read_id]
+            f = Fast5.from_db (f_group)
+        
+        return f
 
     # def head (self, n=5):
     #     l =[]

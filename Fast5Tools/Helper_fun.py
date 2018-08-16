@@ -9,9 +9,9 @@ from collections import OrderedDict
 
 # Third party imports
 import numpy as np
+import h5py
 
 #~~~~~~~~~~~~~~FUNCTIONS~~~~~~~~~~~~~~#
-
 def stderr_print (*args):
     """reproduce print with stderr.write
     """
@@ -61,3 +61,13 @@ def write_attrs (g, d, **kwargs):
         if type(j) == str:
             j = str.encode(j)
         g.attrs.create (name=i, data=j)
+
+def visit_h5 (fn, group=None,**kwargs):
+    """visualise the content of a hdf5 file"""
+    def printobj(name, obj):
+        print(name, obj)
+    with h5py.File(fn, "r") as f:
+        if not group:
+            f.visititems(printobj)
+        else:
+            f[group].visititems(printobj)

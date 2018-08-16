@@ -5,27 +5,22 @@
 
 # Third party imports
 import numpy as np
-import pandas as pd
 
 # Local import
-from Fast5Tools.Helper_fun import write_attrs
+from Fast5Tools.Helper_fun import write_attrs, parse_attrs
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Raw (object):
     """
-    Represent and summarize basecalling informations from Albacore
+    Represent and summarize raw data information
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
-    def __init__(self, signal, metadata, normalization, **kwargs):
+    def __init__(self, signal, metadata, **kwargs):
         """
         """
         # Self variables
         self.signal = signal
         self.metadata = metadata
-
-        if normalization == "zscore":
-            self.signal = (self.signal - self.signal.mean()) / self.signal.std()
-            self.metadata ["normalization"] = "zscore"
 
     def __repr__(self):
         """ Readable description of the object """
@@ -36,11 +31,6 @@ class Raw (object):
 
     def __len__ (self):
         return len(self.signal)
-
-    #~~~~~~~~~~~~~~PROPERTY METHODS~~~~~~~~~~~~~~#
-    @property
-    def to_series (self):
-        return pd.Series (self.signal)
 
     #~~~~~~~~~~~~~~PUBLIC METHODS~~~~~~~~~~~~~~#
     def get_signal (self, start=None, end=None, smoothing_win_size=0):
@@ -71,9 +61,32 @@ class Raw (object):
             signal [i] = np.median (self.signal[j:j+win_size])
         return signal
 
-    def _to_hdf5 (self, grp):
+    def _to_db (self, grp):
         """Write object into an open hdf5 group"""
         # Save Metadata
         write_attrs (grp, self.metadata)
         # Save Signal
         grp.create_dataset("signal", data=self.signal)
+
+    #~~~~~~~~~~~~~~CLASS METHODS~~~~~~~~~~~~~~#
+    @classmethod
+    def from_fast5 (cls, grp, signal_normalization):
+
+        # Extract metadata
+        metadata = parse_attrs (grp)
+
+        # Extract signal
+        signal = grp['Signal'].value
+
+        # Normalise signal if required
+        if signal_normalization == "zscore":
+            signal = (signal - signal.mean()) / signal.std()
+            metadata ["normalization"] = "zscore"
+
+        return Raw (signal=signal, metadata=metadata)
+
+    @classmethod
+    def from_db (cls, grp):
+        return Raw (
+            signal = grp.get("signal").value,
+            metadata = parse_attrs (grp))

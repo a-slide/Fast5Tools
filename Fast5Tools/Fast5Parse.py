@@ -24,7 +24,7 @@ def Fast5Parse (
     signal_normalization="zscore",
     threads = 4,
     max_fast5=None,
-    flush_buffer=100,
+    flush_buffer=1000,
     verbose = False,
     **kwargs):
     """
@@ -114,7 +114,7 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalizat
 
         # Try to create a Fast5 object from the Fast5 file path
         try:
-            f = Fast5 (
+            f = Fast5.from_fast5 (
                 fast5_fn = fast5_fn,
                 basecall_id = basecall_id,
                 signal_normalization = signal_normalization)
@@ -157,7 +157,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, flush_buffer, verbose):
                     buffer  += 1
                     read_id = item.read_id
                     fast5_grp = all_fast5_grp.create_group(read_id)
-                    item._to_hdf5 (grp = fast5_grp)
+                    item._to_db (grp = fast5_grp)
                     read_id_list.append (read_id)
 
                 if time()-t >= 0.2:
