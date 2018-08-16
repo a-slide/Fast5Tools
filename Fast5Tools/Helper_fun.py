@@ -5,6 +5,10 @@
 import sys
 import os
 from glob import iglob
+from collections import OrderedDict
+
+# Third party imports
+import numpy as np
 
 #~~~~~~~~~~~~~~FUNCTIONS~~~~~~~~~~~~~~#
 
@@ -41,3 +45,19 @@ def access_file (fn, **kwargs):
     """Check if the directory is readeable
     """
     return os.path.isfile (fn) and os.access (fn, os.R_OK),
+
+def parse_attrs (g, **kwargs):
+    """Parse hdf5 attributes in an ordered dict"""
+    d = OrderedDict ()
+    for i, j in g.attrs.items():
+        if type(j) == np.bytes_:
+            j = j.decode("utf8")
+        d[i] = j
+    return d
+
+def write_attrs (g, d, **kwargs):
+    """Write dict values in an hdf5 file"""
+    for i, j in d.items():
+        if type(j) == str:
+            j = str.encode(j)
+        g.attrs.create (name=i, data=j)

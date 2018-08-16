@@ -6,10 +6,9 @@
 import multiprocessing as mp
 from time import time
 from collections import Counter
-import shelve
-import pickle
 
 # Third party imports
+import h5py
 
 # Local imports
 from Fast5Tools.Helper_fun import stderr_print, recursive_file_gen, access_dir
@@ -20,9 +19,7 @@ from Fast5Tools.Fast5Wrapper import Fast5Wrapper
 def Fast5Parse (
     fast5_dir,
     db_file,
-    basecall_group='Basecall_1D_000',
-    raw_read_num=0,
-    error_on_missing_basecall=True,
+    basecall_id='Basecall_1D_000',
     signal_normalization="zscore",
     threads = 4,
     verbose = False,
@@ -34,10 +31,8 @@ def Fast5Parse (
         Path to the folder containing Fast5 files (can be in multiple subfolder)
     * db_file: STR
         Path to a directory, where to store the results and logs
-    * basecall_group: STR (default 'Basecall_1D_000')
+    * basecall_id: STR (default 'Basecall_1D_000')
         Name of the analysis group in the fast5 file containing the basecalling information
-    * raw_read_num: INT (default 0)
-        Index of the read in the Raw group
     * signal_normalization (default 'zscore')
         Normalization strategy of the raw signal. Can be None or 'zscore'
     * threads: INT (default 2)
@@ -66,7 +61,7 @@ def Fast5Parse (
     for i in range (threads):
         fp_ps_list.append (mp.Process (
             target=_fast5_parse_worker,
-            args=(fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall, signal_normalization)))
+            args=(fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization)))
 
     # write_db_worker process
     wd_ps = mp.Process (
@@ -86,7 +81,7 @@ def Fast5Parse (
     wd_ps.join ()
 
     # Return Fast5Wrapper object for further
-    return Fast5Wrapper (db_file, verbose)
+    #return Fast5Wrapper (db_file, verbose) ###################################################
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 
@@ -103,7 +98,7 @@ def _fast5_list_worker (fast5_fn_q, fast5_dir, threads):
     for i in range (threads):
         fast5_fn_q.put(None)
 
-def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall, signal_normalization):
+def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization):
     """
     Multi-threaded workers in charge of parsing fast5 file. From valid fast5 files, block matching barcode
     geometries are extracted and add to an output shared memory list. In the same time, metadata are
@@ -115,9 +110,7 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, 
         try:
             f = Fast5 (
                 fast5_fn = fast5_fn,
-                basecall_group = basecall_group,
-                raw_read_num = raw_read_num,
-                error_on_missing_basecall = error_on_missing_basecall,
+                basecall_id = basecall_id,
                 signal_normalization = signal_normalization)
             fast5_obj_q.put (f)
 
@@ -139,7 +132,11 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
     read_id_list = []
 
     # Create shelves database to store the blocks
-    with shelve.open (db_file, flag = "n") as db:
+    with h5py.File(db_file, "w") as fp:
+
+        all_fast5_grp = fp.create_group("fast5")
+        all_md_grp = fp.create_group("metadata")
+
         for _ in range (threads):
             for item in iter (fast5_obj_q.get, None):
 
@@ -151,19 +148,14 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
                 # Add new entry in the database
                 elif isinstance (item, Fast5):
                     n_valid += 1
-                    db[item.read_id] = item
-                    read_id_list.append (item.read_id)
+                    fast5_grp = all_fast5_grp.create_group(item.read_id)
+                    item._to_hdf5 (grp = fast5_grp)
+
+                    #### Collect medatata for global metadata
 
                 if time()-t >= 0.2:
                     if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
                     t = time()
-
-    if verbose:
-        stderr_print(" "*100+"\r")
-        stderr_print("Write database index\n")
-    with open(db_file+".dbi", "wb") as fh:
-        pickle.dump(read_id_list, fh)
-
 
     stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))
     if err_counter:
