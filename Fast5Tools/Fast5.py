@@ -248,3 +248,11 @@ class Fast5 (object):
         #Save basecall
         if self.has_basecall:
             self.basecall._to_hdf5 (grp.create_group("basecall"))
+
+# class Fast5Proxy (object):
+#     """
+#     Parse and extract informations from a Fast5 file basecalled by albacore 2.0+
+#     """
+# def __init__(self,
+#
+#     **kwargs):

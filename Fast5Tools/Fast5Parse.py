@@ -83,7 +83,7 @@ def Fast5Parse (
     wd_ps.join ()
 
     # Return Fast5Wrapper object for further
-    #return Fast5Wrapper (db_file, verbose) ###################################################
+    return Fast5Wrapper (db_file, verbose)
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 
@@ -135,6 +135,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
     n_invalid = n_valid = 0
     t = time()
     read_id_list = []
+    buffer = 0
 
     # Create shelves database to store the blocks
     with h5py.File(db_file, "w") as fp:
@@ -152,16 +153,19 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
                 # Add new entry in the database
                 elif isinstance (item, Fast5):
                     n_valid += 1
+                    buffer  += 1
                     read_id = item.read_id
                     fast5_grp = all_fast5_grp.create_group(read_id)
                     item._to_hdf5 (grp = fast5_grp)
                     read_id_list.append (read_id)
 
-                    #### Collect medatata for global metadata
-
                 if time()-t >= 0.2:
                     if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
                     t = time()
+
+                if buffer == 100:
+                    fp.flush()
+                    buffer = 0
 
         # Write metadata
         all_fast5_grp.attrs.create ("valid_fast5", n_valid)
