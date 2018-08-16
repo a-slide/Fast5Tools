@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Define self package variable
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = ["Fast5Parse", "Fast5Wrapper", "Fast5", "Basecall", "Alignment", "Eventalign"]
 
 description = 'Fast5 tools is a collection of tools to manipulate Fast5 files'

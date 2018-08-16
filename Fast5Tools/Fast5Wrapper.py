@@ -32,6 +32,7 @@ class Fast5Wrapper ():
         **kwargs):
 
         self.db_file = db_file
+        self.verbose = verbose
 
         # Check if db is readable
         if not access_file (self.db_file):
@@ -39,7 +40,10 @@ class Fast5Wrapper ():
             sys.exit()
 
         # If index not accessible or not readeable
-        with h5py.File(self.db_file, "r") as db:
+        if self.verbose:
+            stderr_print ("Load reads ids\n")
+
+        with h5py.File(self.db_file, "r+") as db:
             self.read_id_list = db["read_ids"].value
 
     def __repr__(self):
@@ -48,16 +52,24 @@ class Fast5Wrapper ():
         m+= "\tNumber of reads:{:,}".format(len(self))
         return (m)
 
+    def __enter__(self):
+        if self.verbose:
+            stderr_print ("Open hdf5 database\n")
+        self.db = h5py.File(self.db_file, "r+")
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if self.verbose:
+            stderr_print ("Close hdf5 database\n")
+        self.db.close()
+
     #~~~~~~~~~~~~~~PROPERTY HELPER AND MAGIC METHODS~~~~~~~~~~~~~~#
     def __len__(self):
         return len(self.read_id_list)
 
     def get_fast5 (self, read_id):
-        with h5py.File(self.db_file, "r") as db:
-            f_group = db["fast5"][read_id]
-            f = Fast5.from_db (f_group)
-        
-        return f
+        f_group = self.db["fast5"][read_id]
+        return Fast5.from_db (f_group)
 
     # def head (self, n=5):
     #     l =[]

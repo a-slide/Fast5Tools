@@ -84,7 +84,7 @@ def Fast5Parse (
     wd_ps.join ()
 
     # Return Fast5Wrapper object for further
-    return Fast5Wrapper (db_file, verbose)
+    #return Fast5Wrapper (db_file, verbose)
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 
