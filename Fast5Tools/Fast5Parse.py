@@ -23,8 +23,8 @@ def Fast5Parse (
     basecall_id='Basecall_1D_000',
     signal_normalization="zscore",
     threads = 4,
+    max_fast5=None,
     verbose = False,
-    max_fast5 = None,
     **kwargs):
     """
     Verify some of the critical parameters and parse the fast5 files using multiple threads.
@@ -56,7 +56,7 @@ def Fast5Parse (
     # list_worker process
     fl_ps = mp.Process (
         target=_fast5_list_worker,
-        args=(fast5_fn_q, fast5_dir, threads))
+        args=(fast5_fn_q, fast5_dir, threads, max_fast5))
 
     # fast5_parse_worker processes
     fp_ps_list = []
@@ -68,7 +68,7 @@ def Fast5Parse (
     # write_db_worker process
     wd_ps = mp.Process (
         target=_write_db_worker,
-        args=(fast5_obj_q, db_file, threads, max_fast5, verbose))
+        args=(fast5_obj_q, db_file, threads, verbose))
 
     # Start processes
     fl_ps.start ()
@@ -87,13 +87,16 @@ def Fast5Parse (
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 
-def _fast5_list_worker (fast5_fn_q, fast5_dir, threads):
+def _fast5_list_worker (fast5_fn_q, fast5_dir, threads, max_fast5):
     """
     Mono-threaded worker adding fast5 file found througout a directory tree
     to a feeder queue for the multiprocessing processing workers
     """
     # Load an input Queue with fast5 file path
-    for fast5_fn in recursive_file_gen (dir=fast5_dir, ext="fast5"):
+
+    for i, fast5_fn in enumerate(recursive_file_gen (dir=fast5_dir, ext="fast5")):
+        if max_fast5 and i == max_fast5:
+            break
         fast5_fn_q.put(fast5_fn)
 
     # Add 1 poison pill per worker thread
@@ -123,7 +126,7 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalizat
     # Add poison pill in queues
     fast5_obj_q.put (None)
 
-def _write_db_worker (fast5_obj_q, db_file, threads, max_fast5, verbose):
+def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
     """
     Save the block object found in a shelves database while emptying the Queue
     """
@@ -138,34 +141,27 @@ def _write_db_worker (fast5_obj_q, db_file, threads, max_fast5, verbose):
 
         all_fast5_grp = fp.create_group("fast5")
 
-        try:
-            for _ in range (threads):
-                for item in iter (fast5_obj_q.get, None):
+        for _ in range (threads):
+            for item in iter (fast5_obj_q.get, None):
 
-                    # If error at instantiation
-                    if isinstance (item, Fast5Error):
-                        err_counter[item.err_msg] +=1
-                        n_invalid +=1
+                # If error at instantiation
+                if isinstance (item, Fast5Error):
+                    err_counter[item.err_msg] +=1
+                    n_invalid +=1
 
-                    # Add new entry in the database
-                    elif isinstance (item, Fast5):
-                        n_valid += 1
-                        read_id = item.read_id
-                        fast5_grp = all_fast5_grp.create_group(read_id)
-                        item._to_hdf5 (grp = fast5_grp)
-                        read_id_list.append (read_id)
+                # Add new entry in the database
+                elif isinstance (item, Fast5):
+                    n_valid += 1
+                    read_id = item.read_id
+                    fast5_grp = all_fast5_grp.create_group(read_id)
+                    item._to_hdf5 (grp = fast5_grp)
+                    read_id_list.append (read_id)
 
-                        #### Collect medatata for global metadata
+                    #### Collect medatata for global metadata
 
-                    if time()-t >= 0.2:
-                        if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
-                        t = time()
-
-                    if max_fast5 and n_valid >= max_fast5:
-                        raise StopIteration
-        
-        except StopIteration:
-            pass
+                if time()-t >= 0.2:
+                    if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
+                    t = time()
 
         # Write metadata
         all_fast5_grp.attrs.create ("valid_fast5", n_valid)
