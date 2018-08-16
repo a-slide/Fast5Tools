@@ -169,7 +169,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
 
         # Write read_ids:
         read_id_arr = np.array (read_id_list, dtype="<S40")
-        f.create_dataset ("read_ids", data=read_id_arr)
+        fp.create_dataset ("read_ids", data=read_id_arr)
 
     stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))
     if err_counter:
