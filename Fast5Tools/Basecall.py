@@ -44,8 +44,8 @@ class Basecall (object):
         # Save Metadata
         write_attrs (grp, self.metadata)
         # Save Signal
-        grp.create_dataset("kmers", data=self.kmers)
-        grp.create_dataset("qual", data=self.qual)
+        grp.create_dataset("kmers", data=self.kmers, compression="lzf")
+        grp.create_dataset("qual", data=self.qual, compression="lzf")
         grp.create_dataset("seq", data=str.encode(self.seq))
 
     #~~~~~~~~~~~~~~CLASS METHODS~~~~~~~~~~~~~~#

@@ -66,7 +66,7 @@ class Raw (object):
         # Save Metadata
         write_attrs (grp, self.metadata)
         # Save Signal
-        grp.create_dataset("signal", data=self.signal)
+        grp.create_dataset("signal", data=self.signal, compression="lzf")
 
     #~~~~~~~~~~~~~~CLASS METHODS~~~~~~~~~~~~~~#
     @classmethod
