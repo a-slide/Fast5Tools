@@ -59,7 +59,7 @@ class Basecall (object):
     def _to_hdf5 (self, grp):
         """Write object into an open h5 group"""
         # Save Metadata
-        write_attrs (grp.create_group("metadata"), self.metadata)
+        write_attrs (grp, self.metadata)
         # Save Signal
         grp.create_dataset("kmers", data=self.kmers)
         grp.create_dataset("qual", data=self.qual)

@@ -237,10 +237,10 @@ class Fast5 (object):
         """Write object into an open h5 group"""
 
         # Save Metadata
-        md_grp = grp.create_group("metadata")
-        write_attrs (md_grp.create_group("context_tags"), self.metadata["context_tags"])
-        write_attrs (md_grp.create_group("tracking_id"), self.metadata["tracking_id"])
-        write_attrs (md_grp.create_group("channel_id"), self.metadata["channel_id"])
+        #md_grp = grp.create_group("metadata")
+        write_attrs (grp.create_group("context_tags"), self.metadata["context_tags"])
+        write_attrs (grp.create_group("tracking_id"), self.metadata["tracking_id"])
+        write_attrs (grp.create_group("channel_id"), self.metadata["channel_id"])
 
         # Save raw
         self.raw._to_hdf5 (grp.create_group("raw"))

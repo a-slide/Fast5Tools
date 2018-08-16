@@ -9,6 +9,7 @@ from collections import Counter
 
 # Third party imports
 import h5py
+import numpy as np
 
 # Local imports
 from Fast5Tools.Helper_fun import stderr_print, recursive_file_gen, access_dir
@@ -135,7 +136,6 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
     with h5py.File(db_file, "w") as fp:
 
         all_fast5_grp = fp.create_group("fast5")
-        all_md_grp = fp.create_group("metadata")
 
         for _ in range (threads):
             for item in iter (fast5_obj_q.get, None):
@@ -148,14 +148,24 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
                 # Add new entry in the database
                 elif isinstance (item, Fast5):
                     n_valid += 1
-                    fast5_grp = all_fast5_grp.create_group(item.read_id)
+                    read_id = item.read_id
+                    fast5_grp = all_fast5_grp.create_group(read_id)
                     item._to_hdf5 (grp = fast5_grp)
+                    read_id_list.append (read_id)
 
                     #### Collect medatata for global metadata
 
                 if time()-t >= 0.2:
                     if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
                     t = time()
+
+        # Write metadata
+        all_fast5_grp.attrs.create ("valid_fast5", n_valid)
+        all_fast5_grp.attrs.create ("invalid_fast5", n_invalid)
+
+        # Write read_ids:
+        read_id_arr = np.array (read_id_list, dtype="<S40")
+        all_fast5_grp.create_dataset ("read_ids", data=read_id_arr)
 
     stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))
     if err_counter:
