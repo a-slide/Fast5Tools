@@ -24,6 +24,7 @@ def Fast5Parse (
     signal_normalization="zscore",
     threads = 4,
     max_fast5=None,
+    flush_buffer=100,
     verbose = False,
     **kwargs):
     """
@@ -68,7 +69,7 @@ def Fast5Parse (
     # write_db_worker process
     wd_ps = mp.Process (
         target=_write_db_worker,
-        args=(fast5_obj_q, db_file, threads, verbose))
+        args=(fast5_obj_q, db_file, threads, flush_buffer, verbose))
 
     # Start processes
     fl_ps.start ()
@@ -126,7 +127,7 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalizat
     # Add poison pill in queues
     fast5_obj_q.put (None)
 
-def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
+def _write_db_worker (fast5_obj_q, db_file, threads, flush_buffer, verbose):
     """
     Save the block object found in a shelves database while emptying the Queue
     """
@@ -163,7 +164,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
                     if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
                     t = time()
 
-                if buffer == 100:
+                if buffer == flush_buffer:
                     fp.flush()
                     buffer = 0
 
