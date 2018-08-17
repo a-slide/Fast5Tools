@@ -63,43 +63,26 @@ class Fast5Wrapper ():
             stderr_print ("Close hdf5 database\n")
         self.db.close()
 
-    #~~~~~~~~~~~~~~PROPERTY HELPER AND MAGIC METHODS~~~~~~~~~~~~~~#
-    def __len__(self):
-        return len(self.read_id_list)
+        def __len__(self):
+            return len(self.read_id_list)
+
+    #~~~~~~~~~~~~~~ GETTER METHODS ~~~~~~~~~~~~~~#
 
     def get_fast5 (self, read_id):
         f_group = self.db["fast5"][read_id]
         return Fast5.from_db (f_group)
 
-    # def head (self, n=5):
-    #     l =[]
-    #     with h5py.File("pass.h5", "r") as db:
-    #         fast5_grp = db["fast5"]
-    #         for read_id in self.read_id_list [:n]:
-    #             f = Fast5Proxy (fast5_grp[read_id])
-    #             l.append (f)
-    #     return l
-    #
-    # def sample (self, n=10):
-    #     l =[]
-    #     with shelve.open (self.db_file, flag = "r") as db:
-    #         for read_id in random.sample (self.read_id_list, n):
-    #             f = db[read_id]
-    #             l.append (f)
-    #     return l
-    #
-    # def __iter__ (self):
-    #     with shelve.open (self.db_file, flag = "r") as db:
-    #         for read_id in self.read_id_list:
-    #             f = db[read_id]
-    #             yield (f)
-    #
-    # def __getitem__(self, items):
-    #     with shelve.open (self.db_file, flag = "r") as db:
-    #         if items in self.read_id_list:
-    #             return db[items]
-    #         else:
-    #             return None
+    def sample_fast5 (self, n=10):
+        l =[]
+        for read_id in np.random.choice (self.read_id_list, n):
+            f_group = self.db["fast5"][read_id]
+            l.append (Fast5.from_db (f_group))
+        return l
+
+    def iter_fast5 (self):
+        for read_id in self.read_id_list:
+            f_group = self.db["fast5"][read_id]
+            yield (Fast5.from_db (f_group))
 
     #~~~~~~~~~~~~~~MAIN PUBLIC METHODS~~~~~~~~~~~~~~#
     # def add_bam_alignment (self,
