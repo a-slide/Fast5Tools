@@ -24,7 +24,6 @@ def Fast5Parse (
     signal_normalization="zscore",
     threads = 4,
     max_fast5=None,
-    flush_buffer=1000,
     verbose = False,
     **kwargs):
     """
@@ -69,7 +68,7 @@ def Fast5Parse (
     # write_db_worker process
     wd_ps = mp.Process (
         target=_write_db_worker,
-        args=(fast5_obj_q, db_file, threads, flush_buffer, verbose))
+        args=(fast5_obj_q, db_file, threads, verbose))
 
     # Start processes
     fl_ps.start ()
@@ -127,7 +126,7 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalizat
     # Add poison pill in queues
     fast5_obj_q.put (None)
 
-def _write_db_worker (fast5_obj_q, db_file, threads, flush_buffer, verbose):
+def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
     """
     Save the block object found in a shelves database while emptying the Queue
     """
@@ -138,11 +137,11 @@ def _write_db_worker (fast5_obj_q, db_file, threads, flush_buffer, verbose):
     read_id_list = []
     buffer = 0
 
-    # Create shelves database to store the blocks
+    # Create a hdf5 database to store the Fast5
     with h5py.File(db_file, "w") as fp:
-
         all_fast5_grp = fp.create_group("fast5")
 
+        t = time()
         for _ in range (threads):
             for item in iter (fast5_obj_q.get, None):
 
@@ -161,12 +160,10 @@ def _write_db_worker (fast5_obj_q, db_file, threads, flush_buffer, verbose):
                     read_id_list.append (read_id)
 
                 if time()-t >= 0.2:
-                    if verbose: stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
-                    t = time()
-
-                if buffer == flush_buffer:
+                    if verbose:
+                        stderr_print("\tValid files:{:,} Invalid File:{:,}\r".format (n_valid, n_invalid))
                     fp.flush()
-                    buffer = 0
+                    t = time()
 
         # Write metadata
         all_fast5_grp.attrs.create ("valid_fast5", n_valid)
@@ -174,7 +171,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, flush_buffer, verbose):
 
         # Write read_ids:
         read_id_arr = np.array (read_id_list, dtype="<S40")
-        fp.create_dataset ("read_ids", data=read_id_arr)
+        fp.create_dataset ("read_ids", data=read_id_arr, compression="lzf")
 
     stderr_print("\tValid files:{:,} Invalid File:{:,}\n".format (n_valid, n_invalid))
     if err_counter:

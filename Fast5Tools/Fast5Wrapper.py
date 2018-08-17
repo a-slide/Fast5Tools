@@ -15,7 +15,7 @@ import pysam
 import h5py
 
 # Local imports
-from Fast5Tools.Helper_fun import stderr_print, access_file
+from Fast5Tools.Helper_fun import stderr_print, access_file, parse_attrs, write_attrs
 from Fast5Tools.Fast5 import Fast5, Fast5Error
 from Fast5Tools.Basecall import Basecall
 from Fast5Tools.Alignment import Alignment
@@ -85,52 +85,105 @@ class Fast5Wrapper ():
             yield (Fast5.from_db (f_group))
 
     #~~~~~~~~~~~~~~MAIN PUBLIC METHODS~~~~~~~~~~~~~~#
-    # def add_bam_alignment (self,
-    #     alignment_fn,
-    #     analysis_name = "Alignment",
-    #     max_sync_buffer = 100,
-    #     verbose=False):
-    #     """
-    #     Parse a bam/sam file
-    #     """
-    #     not_in_db_read_id = set()
-    #     valid_read_id = set()
-    #     unmapped_read = secondary_hit = 0
-    #     t = time ()
-    #     sync_buffer = 0
-    #
-    #     if verbose:
-    #         stderr_print ("Parse alignment file {}\n".format(alignment_fn))
-    #
-    #     with shelve.open (self.db_file, flag="w", writeback=True) as db, pysam.AlignmentFile(alignment_fn) as fp:
-    #         for r in fp:
-    #
-    #             # Counter update
-    #             if verbose and time()-t >= 0.2:
-    #                 stderr_print("\tValid reads:{:,}\tReads not in database:{:,}\tReads unmapped:{:,}\tSecondary hits:{:,}\r".format (
-    #                     len(valid_read_id), len(not_in_db_read_id), unmapped_read, secondary_hit))
-    #                 t = time()
-    #
-    #             qname = r.query_name
-    #
-    #             if r.is_secondary or r.is_supplementary:
-    #                 secondary_hit +=1
-    #             elif r.is_unmapped:
-    #                 unmapped_read +=1
-    #             elif qname not in self.read_id_list:
-    #                 not_in_db_read_id.add(qname)
-    #             else:
-    #                 db[qname].analyses[analysis_name] = Alignment(r)
-    #                 valid_read_id.add(qname)
-    #
-    #                 sync_buffer += 1
-    #                 if sync_buffer == max_sync_buffer:
-    #                     db.sync()
-    #                     sync_buffer = 0
-    #
-    #         db.sync()
-    #         stderr_print("\tValid reads:{:,}\tReads not in database:{:,}\tReads unmapped:{:,}\tSecondary hits:{:,}\n".format (
-    #                 len(valid_read_id), len(not_in_db_read_id), unmapped_read, secondary_hit))
+    def add_bam_alignment (self,
+        alignment_fn,
+        alignment_num = 0,
+        verbose=False):
+        """
+        Parse a bam/sam file
+        """
+        c = Counter ()
+        t = time ()
+        valid_qname = set()
+        sync_buffer = 0
+
+        if verbose:
+            stderr_print ("Parse alignment file {}\n".format(alignment_fn))
+
+        align_name = "alignment_{0:02d}".format(alignment_num)
+        with pysam.AlignmentFile (alignment_fn) as bam:
+
+            # Check header presence
+            assert bam.has_index(), "No index/header found in bam file"
+
+            # Create root alignment group
+            if align_name in self.db:
+                del self.db[align_name]
+            align_grp = self.db.create_group (align_name)
+
+            #
+            # # Try to parse bam metadata
+            # if verbose:
+            #     stderr_print ("\tParse bam header\n")
+            # try:
+            #     write_attrs (grp, bam.header["PG"][0])
+            #     write_attrs (grp, bam.header["HD"])
+            # except:
+            #     pass
+
+            # Create a reference sequence index
+            # if verbose:
+            #     stderr_print ("\tCreate reference index\n")
+            # for ref_dict in bam.header["SQ"]:
+            #     ref_name = ref_dict["SN"]
+            #     ref_len = ref_dict["LN"]
+            #     all_ref_grp = grp.create_group (ref_name)
+            #     all_ref_grp.attrs.create (name="ref_len", data=ref_len)
+
+
+            if verbose:
+                stderr_print ("\tParse bam header\n")
+
+            t = time ()
+            for r in bam:
+
+                # Counter update
+                if time()-t >= 0.2:
+                    if verbose:
+                        stderr_print ("\tValid hits:{:,}\tPrimary:{:,}\tSecondary:{:,}\tSupplementary:{:,}\tNot in database:{:,}\tUnmapped:{:,}\r".format (
+                            c["valid_hit"], c["primary_hit"], c["secondary_hit"], c["supplementary_hit"], c["not_in_db"], c["unmapped_hit"]))
+                    self.db.flush()
+                    t = time()
+
+                # Filter out unmapped and reads not in db
+                if r.is_unmapped:
+                    c["unmapped_hit"] +=1
+                elif str.encode(r.query_name) not in self.read_id_list:
+                    c["not_in_db"] +=1
+
+                # Valid hits
+                else:
+                    c["valid_hit"] += 1
+                    if r.is_secondary:
+                        c["secondary_hit"] +=1
+                    elif r.is_supplementary:
+                        c["supplementary_hit"] +=1
+                    else:
+                        c["primary_hit"] +=1
+
+                    qname = r.query_name
+                    rname = r.reference_name
+
+                    # Get corresponding hit num and fast5 group
+                    hit_id = "hit_{0:010d}".format(c["valid_hit"])
+                    fast5_grp = self.db.get(f"/fast5/{qname}/")
+
+                    # Remove previous analysis and create new if needed
+                    if qname not in valid_qname and align_name in fast5_grp:
+                        del fast5_grp [align_name]
+                    fast5_hit_group = fast5_grp.require_group (f"{align_name}/{hit_id}")
+                    valid_qname.add (qname)
+
+                    # Add Hard link to root alignment group as well
+                    ref_group = align_grp.require_group (f"{rname}")
+                    ref_group[hit_id] = fast5_hit_group
+
+                    # Add hit to alignment
+                    self._add_hit (r, grp=fast5_hit_group)
+
+            stderr_print ("\tValid hits:{:,}\tPrimary:{:,}\tSecondary:{:,}\tSupplementary:{:,}\tNot in database:{:,}\tUnmapped:{:,}\n".format (
+                c["valid_hit"], c["primary_hit"], c["secondary_hit"], c["supplementary_hit"], c["not_in_db"], c["unmapped_hit"]))
+            self.db.flush()
     #
     # def add_nanopolish_eventalign (self,
     #     eventalign_fn,
@@ -250,3 +303,24 @@ class Fast5Wrapper ():
 
 
     #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
+
+    def _add_hit (self, r, grp):
+
+        grp.attrs.create ("read_name", data=str.encode(r.query_name))
+        grp.attrs.create ("read_start", data=int(r.query_alignment_start))
+        grp.attrs.create ("read_end", data=int(r.query_alignment_end))
+        grp.attrs.create ("ref_name", data=str.encode(r.reference_name))
+        grp.attrs.create ("ref_start", data=int(r.reference_start))
+        grp.attrs.create ("ref_end_", data=int(r.reference_end))
+        grp.attrs.create ("ref_strand", data= b"-" if r.is_reverse else b"+")
+        grp.attrs.create ("align_len", data=int(r.query_alignment_length))
+        grp.attrs.create ("mapq", data=int(r.mapping_quality))
+        grp.attrs.create ("align_score", data=int(r.get_tag("AS")))
+        if r.is_secondary:
+            grp.attrs.create ("type", data=b"secondary")
+        elif r.is_supplementary:
+            grp.attrs.create ("type", data=b"supplementary")
+        else:
+            grp.attrs.create ("type", data=b"primary")
+
+        grp.create_dataset ("cigar", data=str.encode(r.cigarstring))
