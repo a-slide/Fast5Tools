@@ -14,10 +14,9 @@ import numpy as np
 # Local imports
 from Fast5Tools.Helper_fun import stderr_print, recursive_file_gen, access_dir
 from Fast5Tools.Fast5 import Fast5, Fast5Error
-from Fast5Tools.Fast5Wrapper import Fast5Wrapper
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
-def Fast5Parse (
+def make_fast5_db (
     fast5_dir,
     db_fn,
     basecall_id='Basecall_1D_000',
@@ -86,7 +85,6 @@ def Fast5Parse (
     wd_ps.join ()
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
-
 def _fast5_list_worker (fast5_fn_q, fast5_dir, threads, max_fast5):
     """
     Mono-threaded worker adding fast5 file found througout a directory tree

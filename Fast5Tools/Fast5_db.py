@@ -18,8 +18,9 @@ from Fast5Tools.Helper_fun import stderr_print, access_file
 from Fast5Tools.Fast5 import Fast5, Fast5Error
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
-class Fast5Wrapper ():
+class Fast5_db ():
     """
+    Wrapper on top of a fast5 database
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
     def __init__ (self,
@@ -63,7 +64,6 @@ class Fast5Wrapper ():
             return len(self.read_id_list)
 
     #~~~~~~~~~~~~~~ GETTER METHODS ~~~~~~~~~~~~~~#
-
     def get_fast5 (self, read_id):
         grp = self.db["fast5"][read_id]
         return Fast5.from_db (read_id=read_id, grp=grp)
@@ -81,13 +81,19 @@ class Fast5Wrapper ():
             yield (Fast5.from_db (read_id=read_id, grp=grp))
 
     #~~~~~~~~~~~~~~MAIN PUBLIC METHODS~~~~~~~~~~~~~~#
-    def add_bam_alignment (self,
+    def bam_to_db (self,
         fn,
-        analysis_name = None,
+        analysis_name = "",
         only_primary = False,
         verbose=False):
         """
         Parse a bam/sam file
+        * fn
+            Path to a BAM or SAM file containing all aligned reads (does not need to be sorted, filtered or indexed)
+        * analysis_name
+            sufix name for the aligment analysis. Will through an error if a same name is already in the db (default = '')
+        * only_primary
+            Only select primary alignments (default = False)
         """
         c = Counter ()
         t = time ()
@@ -155,7 +161,7 @@ class Fast5Wrapper ():
                 c["valid_hit"], c["primary_hit"], c["secondary_hit"], c["not_in_db"], c["unmapped_hit"]))
             self.db.flush()
 
-    def add_nanopolish_eventalign (self,
+    def eventalign_to_db (self,
         fn,
         analysis_name = None,
         verbose=False):

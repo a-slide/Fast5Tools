@@ -108,15 +108,6 @@ class Fast5 (object):
                         _ = ax.hlines (y=row["median"], xmin=row["start"], xmax=row["end"], linewidth=2, color="red", zorder=2, alpha=0.75)
                 legend.append (mpatches.Patch(color='red', label='Basecall'))
 
-            # if "Nanopolish_eventalign" in plot_analyses and "Nanopolish_eventalign" in self.analyses:
-            #     ymin, ymax = ax.get_ylim()
-            #     y1, y2 = ymax, ymax+((ymax-ymin)/10)
-            #
-            #     for row in self.analyses["Nanopolish_eventalign"].kmers:
-            #         if row["end"] >= start and row["start"] <= end:
-            #             _ = ax.hlines (y=row["median"], xmin=row["start"], xmax=row["end"], linewidth=2, color="blue", zorder=3, alpha=0.75)
-            #     legend.append (mpatches.Patch(color='blue', label='Nanopolish'))
-
             # Define title
             title = "Read ID {} / Raw:{:,}".format (self.read_id, len(signal))
             _ = ax.set_title (title)
