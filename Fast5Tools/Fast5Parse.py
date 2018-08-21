@@ -22,8 +22,8 @@ def Fast5Parse (
     db_fn,
     basecall_id='Basecall_1D_000',
     signal_normalization="zscore",
-    threads = 4,
-    max_fast5=None,
+    threads = 2,
+    max_fast5=0,
     basecall_required=False,
     verbose = False,
     **kwargs):
@@ -40,6 +40,8 @@ def Fast5Parse (
         Normalization strategy of the raw signal. Can be None or 'zscore'
     * threads: INT (default 2)
         Total number of threads. Minimum = 2
+    * max_fast5 (default = 0)
+        Maximum number of file to try to parse. 0 to deactivate
     """
     if verbose: stderr_print ("Initialise\n")
 
