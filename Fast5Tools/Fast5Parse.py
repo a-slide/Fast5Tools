@@ -19,7 +19,7 @@ from Fast5Tools.Fast5Wrapper import Fast5Wrapper
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 def Fast5Parse (
     fast5_dir,
-    db_file,
+    db_fn,
     basecall_id='Basecall_1D_000',
     signal_normalization="zscore",
     threads = 4,
@@ -32,7 +32,7 @@ def Fast5Parse (
     Fast5 object are save in a python Shelve for later use
     * fast5_dir: STR
         Path to the folder containing Fast5 files (can be in multiple subfolder)
-    * db_file: STR
+    * db_fn: STR
         Path to a directory, where to store the results and logs
     * basecall_id: STR (default 'Basecall_1D_000')
         Name of the analysis group in the fast5 file containing the basecalling information
@@ -69,7 +69,7 @@ def Fast5Parse (
     # write_db_worker process
     wd_ps = mp.Process (
         target=_write_db_worker,
-        args=(fast5_obj_q, db_file, threads, verbose))
+        args=(fast5_obj_q, db_fn, threads, verbose))
 
     # Start processes
     fl_ps.start ()
@@ -125,7 +125,7 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalizat
     # Add poison pill in queues
     fast5_obj_q.put (None)
 
-def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
+def _write_db_worker (fast5_obj_q, db_fn, threads, verbose):
     """
     Save the block object found in a shelves database while emptying the Queue
     """
@@ -137,7 +137,7 @@ def _write_db_worker (fast5_obj_q, db_file, threads, verbose):
     buffer = 0
 
     # Create a hdf5 database to store the Fast5
-    with h5py.File(db_file, "w") as fp:
+    with h5py.File(db_fn, "w") as fp:
         all_fast5_grp = fp.create_group("fast5")
 
         t = time()

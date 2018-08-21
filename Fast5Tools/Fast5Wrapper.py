@@ -23,15 +23,15 @@ class Fast5Wrapper ():
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
     def __init__ (self,
-        db_file,
+        db_fn,
         verbose = False,
         **kwargs):
 
-        self.db_file = db_file
+        self.db_fn = db_fn
         self.verbose = verbose
 
         # Check if db is readable
-        if not access_file (self.db_file):
+        if not access_file (self.db_fn):
             stderr_print ("Can not access or read the database file\n")
             sys.exit()
 
@@ -39,19 +39,19 @@ class Fast5Wrapper ():
         if self.verbose:
             stderr_print ("Load reads ids\n")
 
-        with h5py.File(self.db_file, "r+") as db:
+        with h5py.File(self.db_fn, "r+") as db:
             self.read_id_list = db["read_ids"].value.astype("<U40")
 
     def __repr__(self):
         """ Readable description of the object """
-        m="[{}] file:{}\n".format(self.__class__.__name__, self.db_file)
+        m="[{}] file:{}\n".format(self.__class__.__name__, self.db_fn)
         m+= "\tNumber of reads:{:,}".format(len(self))
         return (m)
 
     def __enter__(self):
         if self.verbose:
             stderr_print ("Open hdf5 database\n")
-        self.db = h5py.File(self.db_file, "r+")
+        self.db = h5py.File(self.db_fn, "r+")
         return self
 
     def __exit__(self, type, value, traceback):
@@ -248,25 +248,3 @@ class Fast5Wrapper ():
 
         stderr_print ("\tValid hits:{:,}\tNot in database:{:,}\n".format (c["valid_hit"], c["not_in_db"]))
         self.db.flush()
-
-    # # #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
-    # def _add_hit (self, r, grp):
-    #
-    #     grp.attrs.create ("read_name", data=str.encode(r.query_name))
-    #     grp.attrs.create ("read_start", data=int(r.query_alignment_start))
-    #     grp.attrs.create ("read_end", data=int(r.query_alignment_end))
-    #     grp.attrs.create ("ref_name", data=str.encode(r.reference_name))
-    #     grp.attrs.create ("ref_start", data=int(r.reference_start))
-    #     grp.attrs.create ("ref_end_", data=int(r.reference_end))
-    #     grp.attrs.create ("ref_strand", data= b"-" if r.is_reverse else b"+")
-    #     grp.attrs.create ("align_len", data=int(r.query_alignment_length))
-    #     grp.attrs.create ("mapq", data=int(r.mapping_quality))
-    #     grp.attrs.create ("align_score", data=int(r.get_tag("AS")))
-    #     if r.is_secondary:
-    #         grp.attrs.create ("type", data=b"secondary")
-    #     elif r.is_supplementary:
-    #         grp.attrs.create ("type", data=b"supplementary")
-    #     else:
-    #         grp.attrs.create ("type", data=b"primary")
-    #
-    #     grp.create_dataset ("cigar", data=str.encode(r.cigarstring))
