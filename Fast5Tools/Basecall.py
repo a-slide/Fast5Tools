@@ -26,12 +26,11 @@ class Basecall (object):
 
     def __repr__(self):
         """ Readable description of the object """
-        m = "[{}]  ".format(self.__class__.__name__)
         if len(self.seq) > 20:
             seq = "{}...{}".format(self.seq[:10], self.seq[-10:])
         else:
             seq = self.seq
-        m +="Seq: {} / Length: {} / Empty kmers: {} / Mean quality: {}".format(
+        m = "Seq: {} / Length: {} / Empty kmers: {} / Mean quality: {}".format(
             seq, len(self), self.metadata["empty_kmers"], round(self.metadata["mean_qual"], 2))
         return m
 
@@ -50,13 +49,13 @@ class Basecall (object):
 
     #~~~~~~~~~~~~~~CLASS METHODS~~~~~~~~~~~~~~#
     @classmethod
-    def from_fast5 (cls, grp, raw):
+    def from_fast5 (cls, grp, signal):
         # Extract metadata
         metadata = parse_attrs (grp)
         # Extract seq and quality from fastq
         seq, qual = cls._parse_fastq (fastq = grp["BaseCalled_template/Fastq"].value.decode("utf8"))
         # Extract kmers information
-        kmers = cls._events_to_kmers (events = grp["BaseCalled_template/Events"].value, raw=raw)
+        kmers = cls._events_to_kmers (events = grp["BaseCalled_template/Events"].value, signal=signal)
         # Add extra Metadata
         metadata["mean_qual"] = qual.mean()
         metadata["empty_kmers"] = np.isnan(kmers["mean"]).sum()
@@ -72,7 +71,7 @@ class Basecall (object):
             metadata = parse_attrs (grp))
 
     @classmethod
-    def _events_to_kmers (cls, events, raw, **kwargs):
+    def _events_to_kmers (cls, events, signal, **kwargs):
         """
         Iterate over the event dataframe and merge together contiguous events with the same kmer (move 0).
         Missing kmers are infered from the previous and current kmer sequences.
@@ -85,13 +84,7 @@ class Basecall (object):
 
         # Create an empty nd array to store elements
         nkmer = events['move'].sum()
-        kmers = np.empty (shape=(nkmer,), dtype=[
-            ('seq','S5'),
-            ('start', np.uint32),
-            ('end', np.uint32),
-            ('mean', np.float64),
-            ('median', np.float64),
-            ('std', np.float64)])
+        kmers = np.empty (shape=(nkmer,), dtype=[ ('seq','S5'), ('start', np.uint64), ('end', np.uint64), ('mean', np.float64), ('median', np.float64), ('std', np.float64)])
 
         # Iterate over the events ndarray
         kmer_index = 0
@@ -118,7 +111,7 @@ class Basecall (object):
                     kmer_index+=1
 
             # Add new kmer
-            sig = raw.get_signal (start, end)
+            sig = signal[start:end]
             kmers[kmer_index] = (seq, start, end, np.mean(sig), np.median(sig), np.std(sig))
             kmer_index+=1
 

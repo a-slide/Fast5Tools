@@ -24,6 +24,7 @@ def Fast5Parse (
     signal_normalization="zscore",
     threads = 4,
     max_fast5=None,
+    basecall_required=False,
     verbose = False,
     **kwargs):
     """
@@ -63,7 +64,7 @@ def Fast5Parse (
     for i in range (threads):
         fp_ps_list.append (mp.Process (
             target=_fast5_parse_worker,
-            args=(fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization)))
+            args=(fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization, basecall_required)))
 
     # write_db_worker process
     wd_ps = mp.Process (
@@ -81,9 +82,6 @@ def Fast5Parse (
     for ps in fp_ps_list:
         ps.join ()
     wd_ps.join ()
-
-    # Return Fast5Wrapper object for further
-    #return Fast5Wrapper (db_file, verbose)
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 
@@ -103,7 +101,7 @@ def _fast5_list_worker (fast5_fn_q, fast5_dir, threads, max_fast5):
     for i in range (threads):
         fast5_fn_q.put(None)
 
-def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization):
+def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization, basecall_required):
     """
     Multi-threaded workers in charge of parsing fast5 file. From valid fast5 files, block matching barcode
     geometries are extracted and add to an output shared memory list. In the same time, metadata are
@@ -116,7 +114,8 @@ def _fast5_parse_worker (fast5_fn_q, fast5_obj_q, basecall_id, signal_normalizat
             f = Fast5.from_fast5 (
                 fast5_fn = fast5_fn,
                 basecall_id = basecall_id,
-                signal_normalization = signal_normalization)
+                signal_normalization = signal_normalization,
+                basecall_required=basecall_required)
             fast5_obj_q.put (f)
 
         # If an error happened just put it in the out queue

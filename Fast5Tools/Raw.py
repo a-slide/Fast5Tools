@@ -24,7 +24,7 @@ class Raw (object):
 
     def __repr__(self):
         """ Readable description of the object """
-        m = "[{}]  Signal: {}... / Length: {}".format (self.__class__.__name__, self.signal[0:5], len(self))
+        m = "Signal: {}... / Length: {}".format (self.signal[0:5], len(self))
         if "normalization" in self.metadata:
             m +=" / Normalization: {}".format(self.metadata ["normalization"])
         return m
@@ -42,11 +42,9 @@ class Raw (object):
         * smoothing_win_size INT
             If larger than 0 will smooth the signal with a moving median window of size X
         """
-
         if smoothing_win_size:
             signal = self._signal_smoothing (win_size=smoothing_win_size)
             return signal [start:end]
-
         else:
             return self.signal [start:end]
 
@@ -74,10 +72,8 @@ class Raw (object):
 
         # Extract metadata
         metadata = parse_attrs (grp)
-
         # Extract signal
         signal = grp['Signal'].value
-
         # Normalise signal if required
         if signal_normalization == "zscore":
             signal = (signal - signal.mean()) / signal.std()

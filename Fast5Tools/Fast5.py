@@ -34,34 +34,24 @@ class Fast5 (object):
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
     def __init__(self,
+        read_id,
         metadata,
-        raw,
-        basecall=None,
-        alignment=None,
-        eventalign=None,
+        data,
         **kwargs):
         """
         """
+        self.read_id = read_id
         self.metadata = metadata
-        self.raw = raw
-        self.basecall = basecall
-        self.alignment = alignment
-        self.eventalign = eventalign
+        self.data = data
 
     def __repr__(self):
         """ Readable description of the object """
         m="[{}]\tRead ID: {}\n".format(self.__class__.__name__, self.read_id)
-        # Raw
-        m += "\t{}\n".format(self.raw)
-        # Basecall if available
-        if self.basecall:
-            m += "\t{}\n".format(self.basecall)
+        for i, j in self.data.items():
+            m += "\t[{}] {}\n".format(i, j)
         return (m)
 
     #~~~~~~~~~~~~~~PROPERTY METHODS~~~~~~~~~~~~~~#
-    @property
-    def read_id (self):
-        return self.raw.metadata["read_id"]
 
     @property
     def sequencing_kit (self):
@@ -98,8 +88,8 @@ class Fast5 (object):
 
         # Define start and end boundaries + extract data
         start = start if start else 0
-        end = end if end else len(self.raw)
-        signal = self.raw.get_signal (start=start, end=end, smoothing_win_size=smoothing_win_size)
+        end = end if end else len(self.data["raw"])
+        signal = self.data["raw"].get_signal (start=start, end=end, smoothing_win_size=smoothing_win_size)
         x_scale = range(start, end)
 
         # Plot the signal
@@ -109,11 +99,11 @@ class Fast5 (object):
 
             legend = []
             #Plot Kmer boundaries if required and available
-            if "basecall" in plot_analyses and self.basecall:
+            if "basecall" in self.data:
                 ymin, ymax = ax.get_ylim()
                 y1, y2 = ymax, ymax+((ymax-ymin)/10)
 
-                for row in self.basecall.kmers:
+                for row in self.data["basecall"].kmers:
                     if row["end"] != row["start"] and row["end"] >= start and row["start"] <= end:
                         _ = ax.hlines (y=row["median"], xmin=row["start"], xmax=row["end"], linewidth=2, color="red", zorder=2, alpha=0.75)
                 legend.append (mpatches.Patch(color='red', label='Basecall'))
@@ -145,40 +135,41 @@ class Fast5 (object):
         write_attrs (md_grp.create_group("channel_id"), self.metadata["channel_id"])
 
         # Save raw
-        self.raw._to_db (grp.create_group("raw"))
+        if "raw" in self.data:
+            raw_grp = grp.create_group("raw")
+            self.data["raw"]._to_db (raw_grp)
 
         #Save basecall
-        if self.basecall:
-            self.basecall._to_db (grp.create_group("basecall"))
+        if "basecall" in self.data:
+            basecall_grp = grp.create_group("basecall")
+            self.data["basecall"]._to_db (basecall_grp)
+            # Add hard link to raw in basecall
+            basecall_grp["signal"] = raw_grp["signal"]
 
     #~~~~~~~~~~~~~~CLASS METHODS~~~~~~~~~~~~~~#
     @classmethod
-    def from_db (cls, grp):
+    def from_db (cls, read_id, grp):
 
         # Get Metadata values
         metadata = OrderedDict ()
-        metadata["context_tags"] = parse_attrs (grp.get("metadata/context_tags"))
-        metadata["tracking_id"] = parse_attrs (grp.get("metadata/tracking_id"))
-        metadata["channel_id"] = parse_attrs (grp.get("metadata/channel_id"))
+        data = OrderedDict ()
 
-        # Get raw values
-        raw = Raw.from_db (grp.get("raw"))
+        for k, g in grp.items():
+            # Get metadata
+            if k == "metadata":
+                metadata["context_tags"] = parse_attrs (g.get("context_tags"))
+                metadata["tracking_id"] = parse_attrs (g.get("tracking_id"))
+                metadata["channel_id"] = parse_attrs (g.get("channel_id"))
+            elif k == "raw":
+                data[k] = Raw.from_db (g)
+            elif k == "basecall":
+                data[k] = Basecall.from_db (g)
+            # elif k.startswith ("alignment"):
+            #     data[k] = Alignment.from_db (g)
+            # elif k.startswith ("eventalign"):
+            #     data[k] = Eventalign.from_db (g)
 
-        # Get basecall values if available
-        if "basecall" in grp:
-            basecall = Basecall.from_db (grp.get("basecall"))
-        else:
-            basecall = None
-
-        # # Get basecall values if available
-        # if "alignment" in grp:
-        #     basecall = Alignment.from_db (grp.get("alignment"))
-        #
-        # # Get basecall values if available
-        # if "eventalign" in grp:
-        #     basecall = Eventalign.from_db (grp.get("eventalign"))
-
-        return Fast5 (metadata=metadata, raw=raw, basecall=basecall)
+        return Fast5 (read_id=read_id, metadata=metadata, data=data)
 
     @classmethod
     def from_fast5 (cls,
@@ -202,11 +193,13 @@ class Fast5 (object):
             raise Fast5Error ("Invalid File")
 
         # Parse the fast5 file
+        data = OrderedDict()
+        metadata = OrderedDict ()
+
         with h5py.File(fast5_fn, "r") as f:
 
             # Get Metadata values
             try:
-                metadata = OrderedDict ()
                 metadata["context_tags"] = parse_attrs (f.get("UniqueGlobalKey/context_tags"))
                 metadata["tracking_id"] = parse_attrs (f.get("UniqueGlobalKey/tracking_id"))
                 metadata["channel_id"] = parse_attrs (f.get("UniqueGlobalKey/channel_id"))
@@ -216,26 +209,17 @@ class Fast5 (object):
             # Get raw values
             try:
                 raw_grp = list(f['/Raw/Reads'].values())[0]
-                raw = Raw.from_fast5 (grp=raw_grp, signal_normalization=signal_normalization)
+                data ["raw"] = Raw.from_fast5 (grp=raw_grp, signal_normalization=signal_normalization)
+                read_id = raw_grp.attrs["read_id"].decode("utf8")
             except (KeyError, IndexError, TypeError) as E:
                 raise Fast5Error ("No Raw Value")
 
             # Get basecall values if available
             try:
                 basecall_group = f["Analyses"][basecall_id]
-                basecall = Basecall.from_fast5 (grp=basecall_group, raw=raw)
+                data ["basecall"] = Basecall.from_fast5 (grp=basecall_group, signal=data["raw"].signal)
             except (KeyError, IndexError, TypeError) as E:
-                basecall=None
                 if basecall_required:
                     raise Fast5Error ("No Basecall Value")
 
-        return Fast5 (metadata=metadata, raw=raw, basecall=basecall)
-
-
-# class Fast5Proxy (object):
-#     """
-#     Parse and extract informations from a Fast5 file basecalled by albacore 2.0+
-#     """
-# def __init__(self,
-#
-#     **kwargs):
+        return Fast5 (read_id=read_id, metadata=metadata, data=data)

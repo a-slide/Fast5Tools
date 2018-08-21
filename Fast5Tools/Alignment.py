@@ -9,7 +9,7 @@ import shelve
 import pysam
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
-class Alignment (object):
+class Hit (object):
     """
     """
     #~~~~~~~~~~~~~~MAGIC METHODS~~~~~~~~~~~~~~#
@@ -43,3 +43,26 @@ class Alignment (object):
             self.align_len,
             self.mapq,
             self.align_score)
+
+
+    # # #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
+    # def _add_hit (self, r, grp):
+    #
+    #     grp.attrs.create ("read_name", data=str.encode(r.query_name))
+    #     grp.attrs.create ("read_start", data=int(r.query_alignment_start))
+    #     grp.attrs.create ("read_end", data=int(r.query_alignment_end))
+    #     grp.attrs.create ("ref_name", data=str.encode(r.reference_name))
+    #     grp.attrs.create ("ref_start", data=int(r.reference_start))
+    #     grp.attrs.create ("ref_end_", data=int(r.reference_end))
+    #     grp.attrs.create ("ref_strand", data= b"-" if r.is_reverse else b"+")
+    #     grp.attrs.create ("align_len", data=int(r.query_alignment_length))
+    #     grp.attrs.create ("mapq", data=int(r.mapping_quality))
+    #     grp.attrs.create ("align_score", data=int(r.get_tag("AS")))
+    #     if r.is_secondary:
+    #         grp.attrs.create ("type", data=b"secondary")
+    #     elif r.is_supplementary:
+    #         grp.attrs.create ("type", data=b"supplementary")
+    #     else:
+    #         grp.attrs.create ("type", data=b"primary")
+    #
+    #     grp.create_dataset ("cigar", data=str.encode(r.cigarstring))
