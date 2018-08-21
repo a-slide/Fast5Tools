@@ -216,7 +216,8 @@ class Fast5_db ():
                         ref_hit_group[hit_id] = fast5_hit_grp
 
                         # Add kmer array
-                        kmers = np.array (kmer_list, dtype=[('seq', 'S5'), ('start', np.uint64), ('end', np.uint64), ('ref_pos', np.uint64), ('median', np.float64)])
+                        #kmers = np.array (kmer_list, dtype=[('seq', 'S5'), ('start', np.uint64), ('end', np.uint64), ('ref_pos', np.uint64), ('median', np.float64)])
+                        kmers = np.array (kmer_list, dtype=[('seq', 'S5'), ('start', np.uint64), ('end', np.uint64), ('ref_pos', np.uint64)])
                         fast5_hit_grp.create_dataset ("kmers", data=kmers, compression="lzf")
                         fast5_hit_grp.attrs.create ("read_id", data=str.encode(qname))
                         fast5_hit_grp.attrs.create ("ref_id", data=str.encode(rname))
@@ -237,7 +238,7 @@ class Fast5_db ():
                         valid = True
                         kmer_list = []
                         fast5_grp = self.db.get("fast5/{}".format(qname))
-                        signal = fast5_grp.get("raw/signal").value
+                        #signal = fast5_grp.get("raw/signal").value
                     else:
                         valid = False
                         c["not_in_db"] +=1
@@ -248,9 +249,10 @@ class Fast5_db ():
                     start = int(ls[2])
                     end = int(ls[3])
                     ref_pos = int(ls[0])
-                    sig = signal [start:end]
-                    median = np.median(sig) if len(sig) > 0 else np.nan
-                    kmer_list.append ((seq, start, end, ref_pos, median))
+                    #sig = signal [start:end]
+                    #median = np.median(sig) if len(sig) > 0 else np.nan
+                    #kmer_list.append ((seq, start, end, ref_pos, median))
+                    kmer_list.append ((seq, start, end, ref_pos))
 
         stderr_print ("\tValid hits:{:,}\tNot in database:{:,}\n".format (c["valid_hit"], c["not_in_db"]))
         self.db.flush()

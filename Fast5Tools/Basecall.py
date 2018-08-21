@@ -58,7 +58,7 @@ class Basecall (object):
         kmers = cls._events_to_kmers (events = grp["BaseCalled_template/Events"].value, signal=signal)
         # Add extra Metadata
         metadata["mean_qual"] = qual.mean()
-        metadata["empty_kmers"] = np.isnan(kmers["mean"]).sum()
+        ############### metadata["empty_kmers"] = np.isnan(kmers["mean"]).sum()
 
         return Basecall (kmers=kmers, seq=seq, qual=qual, metadata=metadata)
 
@@ -84,7 +84,8 @@ class Basecall (object):
 
         # Create an empty nd array to store elements
         nkmer = events['move'].sum()
-        kmers = np.empty (shape=(nkmer,), dtype=[ ('seq','S5'), ('start', np.uint64), ('end', np.uint64), ('mean', np.float64), ('median', np.float64), ('std', np.float64)])
+        ############### kmers = np.empty (shape=(nkmer,), dtype=[ ('seq','S5'), ('start', np.uint64), ('end', np.uint64), ('mean', np.float64), ('median', np.float64), ('std', np.float64)])
+        kmers = np.empty (shape=(nkmer,), dtype=[ ('seq','S5'), ('start', np.uint64), ('end', np.uint64)])
 
         # Iterate over the events ndarray
         kmer_index = 0
@@ -107,12 +108,14 @@ class Basecall (object):
 
                 for j in range (1, move):
                     missing_kmer_seq = prev_seq [j:move] + seq [0:(5-move+j)]
-                    kmers[kmer_index] = (missing_kmer_seq, start, end, np.nan, np.nan, np.nan)
+                    ############### kmers[kmer_index] = (missing_kmer_seq, start, end, np.nan, np.nan, np.nan)
+                    kmers[kmer_index] = (missing_kmer_seq, start, end)
                     kmer_index+=1
 
             # Add new kmer
-            sig = signal[start:end]
-            kmers[kmer_index] = (seq, start, end, np.mean(sig), np.median(sig), np.std(sig))
+            ############### sig = signal[start:end]
+            ############### kmers[kmer_index] = (seq, start, end, np.mean(sig), np.median(sig), np.std(sig))
+            kmers[kmer_index] = (seq, start, end)
             kmer_index+=1
 
         return kmers
