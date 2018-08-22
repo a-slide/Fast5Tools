@@ -27,8 +27,8 @@ def make_fast5_db (
     verbose = False,
     **kwargs):
     """
-    Verify some of the critical parameters and parse the fast5 files using multiple threads.
-    Fast5 object are save in a python Shelve for later use
+    fast5_parse read all fast5 files in a directory recursively, extract raw signal, metadata and Albacore basecalling values (if available).
+    The fast5 objects generated are stored in a HDF5 database
     * fast5_dir: STR
         Path to the folder containing Fast5 files (can be in multiple subfolder)
     * db_fn: STR
@@ -46,6 +46,7 @@ def make_fast5_db (
 
     # Tests values
     assert access_dir (fast5_dir), "Cannot read in the source fast5 folder"
+    ############################################################################ Test if dest is writeable
     assert threads >= 2, "threads should be greater that 2"
 
     if verbose: stderr_print ("Parse Fast5 files and save to database\n")
