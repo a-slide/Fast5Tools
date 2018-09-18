@@ -23,6 +23,7 @@ def Fast5Parse (
     basecall_group='Basecall_1D_000',
     raw_read_num=0,
     error_on_missing_basecall=True,
+    max_fast5=0,
     signal_normalization="zscore",
     threads = 4,
     verbose = False,
@@ -38,6 +39,8 @@ def Fast5Parse (
         Name of the analysis group in the fast5 file containing the basecalling information
     * raw_read_num: INT (default 0)
         Index of the read in the Raw group
+    * max_fast5 (default = 0)
+        Maximum number of file to try to parse. 0 to deactivate
     * signal_normalization (default 'zscore')
         Normalization strategy of the raw signal. Can be None or 'zscore'
     * threads: INT (default 2)
@@ -57,46 +60,40 @@ def Fast5Parse (
     fast5_obj_q = manager.Queue(maxsize=1000) # Queue for blocks found
 
     # list_worker process
-    fl_ps = mp.Process (
-        target=_fast5_list_worker,
-        args=(fast5_fn_q, fast5_dir, threads))
-
-    # fast5_parse_worker processes
-    fp_ps_list = []
+    ps_list = []
+    ps_list.append (mp.Process (target=_fast5_list_worker, args=(fast5_fn_q, fast5_dir, threads, max_fast5)))
     for i in range (threads):
-        fp_ps_list.append (mp.Process (
-            target=_fast5_parse_worker,
-            args=(fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall, signal_normalization)))
+        ps_list.append (mp.Process (target=_fast5_parse_worker, args=(fast5_fn_q, fast5_obj_q, basecall_group, raw_read_num, error_on_missing_basecall, signal_normalization)))
+    ps_list.append (mp.Process (target=_write_db_worker, args=(fast5_obj_q, db_file, threads, verbose)))
 
-    # write_db_worker process
-    wd_ps = mp.Process (
-        target=_write_db_worker,
-        args=(fast5_obj_q, db_file, threads, verbose))
+    try:
+        # Start processes
+        for ps in ps_list:
+            ps.start ()
+        # Join processes
+        for ps in ps_list:
+            ps.join ()
 
-    # Start processes
-    fl_ps.start ()
-    for ps in fp_ps_list:
-        ps.start ()
-    wd_ps.start ()
-
-    # Join processes
-    fl_ps.join ()
-    for ps in fp_ps_list:
-        ps.join ()
-    wd_ps.join ()
+    # Kill processes if early stop
+    except (BrokenPipeError, KeyboardInterrupt) as E:
+        if verbose: stderr_print ("Early stop. Kill processes\n")
+        for ps in ps_list:
+            ps.terminate ()
 
     # Return Fast5Wrapper object for further
     return Fast5Wrapper (db_file, verbose)
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 
-def _fast5_list_worker (fast5_fn_q, fast5_dir, threads):
+def _fast5_list_worker (fast5_fn_q, fast5_dir, threads, max_fast5):
     """
     Mono-threaded worker adding fast5 file found througout a directory tree
     to a feeder queue for the multiprocessing processing workers
     """
     # Load an input Queue with fast5 file path
-    for fast5_fn in recursive_file_gen (dir=fast5_dir, ext="fast5"):
+    for i, fast5_fn in enumerate(recursive_file_gen (dir=fast5_dir, ext="fast5")):
+        if max_fast5 and i == max_fast5:
+            break
         fast5_fn_q.put(fast5_fn)
 
     # Add 1 poison pill per worker thread
