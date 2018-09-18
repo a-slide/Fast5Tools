@@ -12,8 +12,8 @@ import h5py
 import numpy as np
 
 # Local imports
-from Fast5Tools.Helper_fun import stderr_print, recursive_file_gen, access_dir
-from Fast5Tools.Fast5 import Fast5, Fast5Error
+from Fast5Tools_hdf5.Helper_fun import stderr_print, recursive_file_gen, access_dir
+from Fast5Tools_hdf5.Fast5 import Fast5, Fast5Error
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 def make_fast5_db (
@@ -57,33 +57,25 @@ def make_fast5_db (
     fast5_obj_q = manager.Queue(maxsize=1000) # Queue for blocks found
 
     # list_worker process
-    fl_ps = mp.Process (
-        target=_fast5_list_worker,
-        args=(fast5_fn_q, fast5_dir, threads, max_fast5))
-
-    # fast5_parse_worker processes
-    fp_ps_list = []
+    ps_list = []
+    ps_list.append (mp.Process ( target=_fast5_list_worker,args=(fast5_fn_q, fast5_dir, threads, max_fast5)))
     for i in range (threads):
-        fp_ps_list.append (mp.Process (
-            target=_fast5_parse_worker,
-            args=(fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization, basecall_required)))
+        ps_list.append (mp.Process (target=_fast5_parse_worker, args=(fast5_fn_q, fast5_obj_q, basecall_id, signal_normalization, basecall_required)))
+    ps_list.append (mp.Process (target=_write_db_worker, args=(fast5_obj_q, db_fn, threads, verbose)))
 
-    # write_db_worker process
-    wd_ps = mp.Process (
-        target=_write_db_worker,
-        args=(fast5_obj_q, db_fn, threads, verbose))
+    try:
+        # Start processes
+        for ps in ps_list:
+            ps.start ()
+        # Join processes
+        for ps in ps_list:
+            ps.join ()
 
-    # Start processes
-    fl_ps.start ()
-    for ps in fp_ps_list:
-        ps.start ()
-    wd_ps.start ()
-
-    # Join processes
-    fl_ps.join ()
-    for ps in fp_ps_list:
-        ps.join ()
-    wd_ps.join ()
+    # Kill processes if early stop
+    except (BrokenPipeError, KeyboardInterrupt) as E:
+        if verbose: stderr_print ("Early stop. Kill processes\n")
+        for ps in ps_list:
+            ps.terminate ()
 
 #~~~~~~~~~~~~~~PRIVATE METHODS~~~~~~~~~~~~~~#
 def _fast5_list_worker (fast5_fn_q, fast5_dir, threads, max_fast5):

@@ -13,9 +13,9 @@ from matplotlib import pyplot as pl
 import matplotlib.patches as mpatches
 
 # Local import
-from Fast5Tools.Basecall import Basecall
-from Fast5Tools.Raw import Raw
-from Fast5Tools.Helper_fun import stderr_print, parse_attrs, write_attrs
+from Fast5Tools_hdf5.Basecall import Basecall
+from Fast5Tools_hdf5.Raw import Raw
+from Fast5Tools_hdf5.Helper_fun import stderr_print, parse_attrs, write_attrs
 
 #~~~~~~~~~~~~~~ERROR DEFINITION~~~~~~~~~~~~~~#
 class Fast5Error (Exception):

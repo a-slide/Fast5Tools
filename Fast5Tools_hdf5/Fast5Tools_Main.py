@@ -7,11 +7,11 @@ import argparse
 import sys
 
 # Local imports
-from Fast5Tools import __version__ as package_version
-from Fast5Tools import __name__ as package_name
-from Fast5Tools.Fast5_db import Fast5_db
-from Fast5Tools.make_fast5_db import make_fast5_db
-from Fast5Tools.Helper_fun import stderr_print
+from Fast5Tools_hdf5 import __version__ as package_version
+from Fast5Tools_hdf5 import __name__ as package_name
+from Fast5Tools_hdf5.Fast5_db import Fast5_db
+from Fast5Tools_hdf5.make_fast5_db import make_fast5_db
+from Fast5Tools_hdf5.Helper_fun import stderr_print
 
 #~~~~~~~~~~~~~~TOP LEVEL ENTRY POINT~~~~~~~~~~~~~~#
 def main ():

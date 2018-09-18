@@ -7,7 +7,7 @@
 import numpy as np
 
 # Local import
-from Fast5Tools.Helper_fun import write_attrs, parse_attrs
+from Fast5Tools_hdf5.Helper_fun import write_attrs, parse_attrs
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Raw (object):

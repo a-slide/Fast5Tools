@@ -14,8 +14,8 @@ import pysam
 import h5py
 
 # Local imports
-from Fast5Tools.Helper_fun import stderr_print, access_file
-from Fast5Tools.Fast5 import Fast5, Fast5Error
+from Fast5Tools_hdf5.Helper_fun import stderr_print, access_file
+from Fast5Tools_hdf5.Fast5 import Fast5, Fast5Error
 
 #~~~~~~~~~~~~~~CLASS~~~~~~~~~~~~~~#
 class Fast5_db ():
